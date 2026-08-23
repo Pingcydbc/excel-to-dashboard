@@ -5,8 +5,8 @@ import { ShieldCheck, Lock, Mail, ArrowRight, AlertCircle, CheckCircle2 } from "
 import Link from "next/link";
 
 export default function AdminLoginPage() {
-  const [email, setEmail] = useState("admin@dashboard.local");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail] = useState("admin@gmail.com");
+  const [password, setPassword] = useState("admin1234");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -92,16 +92,6 @@ export default function AdminLoginPage() {
               />
             </div>
           </div>
-
-          {/* Preset Admin Hint */}
-          <div className="p-3 bg-indigo-50/60 rounded-xl border border-indigo-100 text-[11px] text-indigo-900 space-y-1">
-            <div className="font-bold flex items-center gap-1 text-indigo-700">
-              <CheckCircle2 className="w-3.5 h-3.5" /> บัญชีทดสอบเริ่มต้น (Default Credentials):
-            </div>
-            <div className="text-slate-600 font-mono">Email: admin@dashboard.local</div>
-            <div className="text-slate-600 font-mono">Password: admin123</div>
-          </div>
-
           <button
             type="submit"
             disabled={loading}
