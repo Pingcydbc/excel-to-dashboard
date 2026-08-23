@@ -41,14 +41,15 @@ export async function GET(req: NextRequest) {
       where.completeness = { lt: 50 };
     }
 
-    const total = await prisma.studentProfileStatus.count({ where });
-
-    const students = await prisma.studentProfileStatus.findMany({
-      where,
-      orderBy: [{ completeness: "desc" }, { studentId: "asc" }],
-      skip: exportAll ? 0 : (page - 1) * limit,
-      take: exportAll ? 5000 : limit,
-    });
+    const [total, students] = await Promise.all([
+      prisma.studentProfileStatus.count({ where }),
+      prisma.studentProfileStatus.findMany({
+        where,
+        orderBy: [{ completeness: "desc" }, { studentId: "asc" }],
+        skip: exportAll ? 0 : (page - 1) * limit,
+        take: exportAll ? 5000 : limit,
+      }),
+    ]);
 
     return NextResponse.json({
       success: true,

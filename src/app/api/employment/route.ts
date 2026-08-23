@@ -49,14 +49,15 @@ export async function GET(req: NextRequest) {
       where.jobMajorMatch = { contains: match };
     }
 
-    const total = await prisma.graduateTracking.count({ where });
-
-    const graduates = await prisma.graduateTracking.findMany({
-      where,
-      orderBy: [{ gradYear: "desc" }, { studentId: "asc" }],
-      skip: exportAll ? 0 : (page - 1) * limit,
-      take: exportAll ? 5000 : limit,
-    });
+    const [total, graduates] = await Promise.all([
+      prisma.graduateTracking.count({ where }),
+      prisma.graduateTracking.findMany({
+        where,
+        orderBy: [{ gradYear: "desc" }, { studentId: "asc" }],
+        skip: exportAll ? 0 : (page - 1) * limit,
+        take: exportAll ? 5000 : limit,
+      }),
+    ]);
 
     return NextResponse.json({
       success: true,

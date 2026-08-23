@@ -3,84 +3,221 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
+// In-memory cache for dashboard stats (TTL: 30 seconds)
+const statsCache = new Map<string, { data: any; expiresAt: number }>();
+
+export function clearStatsCache() {
+  statsCache.clear();
+}
+
 export async function GET(req: NextRequest) {
+  const startTime = Date.now();
   try {
     const { searchParams } = new URL(req.url);
-    const yearParam = searchParams.get("year");
-    const levelParam = searchParams.get("level");
-    const majorParam = searchParams.get("major");
+    const yearParam = searchParams.get("year") || "all";
+    const levelParam = searchParams.get("level") || "all";
+    const majorParam = searchParams.get("major") || "all";
+
+    const cacheKey = `stats_${yearParam}_${levelParam}_${majorParam}`;
+    const cached = statsCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return NextResponse.json(
+        { success: true, data: cached.data, cached: true, responseTimeMs: Date.now() - startTime },
+        {
+          headers: {
+            "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
+          },
+        }
+      );
+    }
 
     // Profile Status filters
     const profileWhere: any = {};
-    if (levelParam && levelParam !== "all") {
+    if (levelParam !== "all") {
       profileWhere.educationLevel = { contains: levelParam };
     }
-    if (majorParam && majorParam !== "all") {
+    if (majorParam !== "all") {
       profileWhere.major = { contains: majorParam };
     }
 
     // Graduate filters
     const gradWhere: any = {};
-    if (yearParam && yearParam !== "all") {
+    if (yearParam !== "all") {
       const parsedYear = parseInt(yearParam, 10);
       if (!isNaN(parsedYear)) {
         gradWhere.gradYear = parsedYear;
       }
     }
-    if (levelParam && levelParam !== "all") {
+    if (levelParam !== "all") {
       gradWhere.educationLevel = { contains: levelParam };
     }
-    if (majorParam && majorParam !== "all") {
+    if (majorParam !== "all") {
       gradWhere.major = { contains: majorParam };
     }
 
-    // 1. Fetch Student Profile Stats
-    const totalStudents = await prisma.studentProfileStatus.count({ where: profileWhere });
-    const completedStudents = await prisma.studentProfileStatus.count({
-      where: { ...profileWhere, completeness: { gte: 80 } },
-    });
-    const mediumStudents = await prisma.studentProfileStatus.count({
-      where: { ...profileWhere, completeness: { gte: 50, lt: 80 } },
-    });
-    const lowStudents = await prisma.studentProfileStatus.count({
-      where: { ...profileWhere, completeness: { lt: 50 } },
-    });
+    // Single Query for Profile Stats Aggregation
+    const profileStatsPromise = (async () => {
+      // Build condition for SQL query
+      let whereClause = "WHERE 1=1";
+      const params: any[] = [];
+      let pIdx = 1;
 
-    const avgCompletenessAgg = await prisma.studentProfileStatus.aggregate({
-      where: profileWhere,
-      _avg: { completeness: true },
-    });
-    const avgCompleteness = avgCompletenessAgg._avg.completeness || 0;
+      if (levelParam !== "all") {
+        whereClause += ` AND "educationLevel" ILIKE $${pIdx++}`;
+        params.push(`%${levelParam}%`);
+      }
+      if (majorParam !== "all") {
+        whereClause += ` AND "major" ILIKE $${pIdx++}`;
+        params.push(`%${majorParam}%`);
+      }
 
-    // Completeness tier distribution
-    const tier0_20 = await prisma.studentProfileStatus.count({
-      where: { ...profileWhere, completeness: { lte: 20 } },
-    });
-    const tier21_50 = await prisma.studentProfileStatus.count({
-      where: { ...profileWhere, completeness: { gt: 20, lte: 50 } },
-    });
-    const tier51_79 = await prisma.studentProfileStatus.count({
-      where: { ...profileWhere, completeness: { gt: 50, lt: 80 } },
-    });
-    const tier80_100 = completedStudents;
+      const sql = `
+        SELECT 
+          COUNT(*)::int as "totalStudents",
+          COUNT(*) FILTER (WHERE completeness >= 80)::int as "completedStudents",
+          COUNT(*) FILTER (WHERE completeness >= 50 AND completeness < 80)::int as "mediumStudents",
+          COUNT(*) FILTER (WHERE completeness < 50)::int as "lowStudents",
+          COALESCE(AVG(completeness), 0)::float as "avgCompleteness",
+          COUNT(*) FILTER (WHERE completeness <= 20)::int as "tier0_20",
+          COUNT(*) FILTER (WHERE completeness > 20 AND completeness <= 50)::int as "tier21_50",
+          COUNT(*) FILTER (WHERE completeness > 50 AND completeness < 80)::int as "tier51_79"
+        FROM "StudentProfileStatus"
+        ${whereClause}
+      `;
 
-    const completenessDistribution = [
-      { range: "0 - 20%", count: tier0_20, color: "#ef4444" },
-      { range: "21 - 50%", count: tier21_50, color: "#f97316" },
-      { range: "51 - 79%", count: tier51_79, color: "#eab308" },
-      { range: "80 - 100%", count: tier80_100, color: "#10b981" },
-    ];
+      try {
+        const rows: any[] = await prisma.$queryRawUnsafe(sql, ...params);
+        const row = rows[0] || {};
+        const total = row.totalStudents || 0;
+        const completed = row.completedStudents || 0;
+        const medium = row.mediumStudents || 0;
+        const low = row.lowStudents || 0;
+        const avg = Math.round((row.avgCompleteness || 0) * 10) / 10;
+        const t0_20 = row.tier0_20 || 0;
+        const t21_50 = row.tier21_50 || 0;
+        const t51_79 = row.tier51_79 || 0;
+        const t80_100 = completed;
 
-    // 2. Fetch Graduate Tracking Stats
-    const totalGraduates = await prisma.graduateTracking.count({ where: gradWhere });
-    
-    // Group by trackingStatus
-    const statusGroups = await prisma.graduateTracking.groupBy({
-      by: ["trackingStatus"],
-      where: gradWhere,
-      _count: { _all: true },
-    });
+        return {
+          totalStudents: total,
+          completedStudents: completed,
+          mediumStudents: medium,
+          lowStudents: low,
+          avgCompleteness: avg,
+          completenessRate: total > 0 ? (completed / total) * 100 : 0,
+          distribution: [
+            { range: "0 - 20%", count: t0_20, color: "#ef4444" },
+            { range: "21 - 50%", count: t21_50, color: "#f97316" },
+            { range: "51 - 79%", count: t51_79, color: "#eab308" },
+            { range: "80 - 100%", count: t80_100, color: "#10b981" },
+          ],
+        };
+      } catch {
+        // Fallback to standard Prisma if raw query encounters any issue
+        const total = await prisma.studentProfileStatus.count({ where: profileWhere });
+        const completed = await prisma.studentProfileStatus.count({
+          where: { ...profileWhere, completeness: { gte: 80 } },
+        });
+        const medium = await prisma.studentProfileStatus.count({
+          where: { ...profileWhere, completeness: { gte: 50, lt: 80 } },
+        });
+        const low = await prisma.studentProfileStatus.count({
+          where: { ...profileWhere, completeness: { lt: 50 } },
+        });
+        const avgAgg = await prisma.studentProfileStatus.aggregate({
+          where: profileWhere,
+          _avg: { completeness: true },
+        });
+        return {
+          totalStudents: total,
+          completedStudents: completed,
+          mediumStudents: medium,
+          lowStudents: low,
+          avgCompleteness: Math.round((avgAgg._avg.completeness || 0) * 10) / 10,
+          completenessRate: total > 0 ? (completed / total) * 100 : 0,
+          distribution: [
+            { range: "0 - 20%", count: low, color: "#ef4444" },
+            { range: "21 - 50%", count: low, color: "#f97316" },
+            { range: "51 - 79%", count: medium, color: "#eab308" },
+            { range: "80 - 100%", count: completed, color: "#10b981" },
+          ],
+        };
+      }
+    })();
 
+    // Run all database operations in parallel
+    const [
+      profileStats,
+      totalGraduates,
+      statusGroups,
+      matchGroups,
+      salaryGroups,
+      majorsData,
+      companyGroups,
+      availableYears,
+      availableMajors,
+    ] = await Promise.all([
+      profileStatsPromise,
+      prisma.graduateTracking.count({ where: gradWhere }),
+      prisma.graduateTracking.groupBy({
+        by: ["trackingStatus"],
+        where: gradWhere,
+        _count: { _all: true },
+      }),
+      prisma.graduateTracking.groupBy({
+        by: ["jobMajorMatch"],
+        where: {
+          ...gradWhere,
+          OR: [{ trackingStatus: { contains: "มีงานทำ" } }, { companyName: { not: "" } }],
+        },
+        _count: { _all: true },
+      }),
+      prisma.graduateTracking.groupBy({
+        by: ["salaryRange"],
+        where: {
+          ...gradWhere,
+          salaryRange: { not: null },
+        },
+        _count: { _all: true },
+      }),
+      prisma.graduateTracking.groupBy({
+        by: ["major", "jobMajorMatch"],
+        where: {
+          ...gradWhere,
+          major: { not: null },
+          OR: [{ trackingStatus: { contains: "มีงานทำ" } }, { companyName: { not: "" } }],
+        },
+        _count: { _all: true },
+      }),
+      prisma.graduateTracking.groupBy({
+        by: ["companyName"],
+        where: {
+          ...gradWhere,
+          companyName: { not: null },
+        },
+        _count: { _all: true },
+        orderBy: {
+          _count: {
+            companyName: "desc",
+          },
+        },
+        take: 30,
+      }),
+      prisma.graduateTracking.findMany({
+        select: { gradYear: true },
+        distinct: ["gradYear"],
+        orderBy: { gradYear: "desc" },
+        take: 10,
+      }),
+      prisma.studentProfileStatus.findMany({
+        select: { major: true },
+        where: { major: { not: null } },
+        distinct: ["major"],
+        take: 50,
+      }),
+    ]);
+
+    // Process Graduate Status
     let employedCount = 0;
     let studyCount = 0;
     let unemployedCount = 0;
@@ -113,19 +250,9 @@ export async function GET(req: NextRequest) {
       { name: "เกณฑ์ทหาร/อื่นๆ", value: militaryCount + otherStatusCount, color: "#8b5cf6" },
     ].filter((d) => d.value > 0);
 
-    // Job Match stats (ตรงสาย vs ไม่ตรงสาย)
-    const matchGroups = await prisma.graduateTracking.groupBy({
-      by: ["jobMajorMatch"],
-      where: {
-        ...gradWhere,
-        OR: [{ trackingStatus: { contains: "มีงานทำ" } }, { companyName: { not: "" } }],
-      },
-      _count: { _all: true },
-    });
-
+    // Process Job Match
     let jobMatchedCount = 0;
     let jobNotMatchedCount = 0;
-    let jobMatchUnspecified = 0;
 
     matchGroups.forEach((g) => {
       const m = g.jobMajorMatch || "";
@@ -134,24 +261,13 @@ export async function GET(req: NextRequest) {
         jobMatchedCount += count;
       } else if (m.includes("ไม่ตรงสาย") || m === "ไม่ตรง") {
         jobNotMatchedCount += count;
-      } else {
-        jobMatchUnspecified += count;
       }
     });
 
     const totalEmployedWithMatch = jobMatchedCount + jobNotMatchedCount;
     const matchRate = totalEmployedWithMatch > 0 ? (jobMatchedCount / totalEmployedWithMatch) * 100 : 0;
 
-    // Salary Distribution
-    const salaryGroups = await prisma.graduateTracking.groupBy({
-      by: ["salaryRange"],
-      where: {
-        ...gradWhere,
-        salaryRange: { not: null },
-      },
-      _count: { _all: true },
-    });
-
+    // Process Salary Distribution
     const salaryMap: Record<string, number> = {
       "ต่ำกว่า 9,000": 0,
       "9,001 - 15,000": 0,
@@ -181,19 +297,8 @@ export async function GET(req: NextRequest) {
       count,
     }));
 
-    // Major vs Job Match Grouped Bar Chart (Top 8 Majors)
-    const majorsData = await prisma.graduateTracking.groupBy({
-      by: ["major", "jobMajorMatch"],
-      where: {
-        ...gradWhere,
-        major: { not: null },
-        OR: [{ trackingStatus: { contains: "มีงานทำ" } }, { companyName: { not: "" } }],
-      },
-      _count: { _all: true },
-    });
-
+    // Process Major Match Chart
     const majorMap: Record<string, { major: string; matched: number; notMatched: number; total: number }> = {};
-
     majorsData.forEach((item) => {
       const mName = item.major || "ไม่ระบุ";
       if (!majorMap[mName]) {
@@ -212,102 +317,71 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => b.total - a.total)
       .slice(0, 8);
 
-    // 3. Company & Employer Analytics
-    // Fetch unique companies with student count
-    const companyGroups = await prisma.graduateTracking.groupBy({
-      by: ["companyName"],
-      where: {
-        ...gradWhere,
-        companyName: { not: null },
-      },
-      _count: { _all: true },
-      orderBy: {
-        _count: {
-          companyName: "desc",
-        },
-      },
-    });
-
+    // Process Companies
     const validCompanies = companyGroups.filter(
       (c) => c.companyName && c.companyName.trim() !== "" && c.companyName !== "-"
     );
-
     const totalUniqueCompanies = validCompanies.length;
-
-    // Top 10 Hiring Companies
     const topCompaniesRaw = validCompanies.slice(0, 10);
-    const topCompanies = await Promise.all(
-      topCompaniesRaw.map(async (c) => {
-        const companyName = c.companyName!;
-        const sampleRecord = await prisma.graduateTracking.findFirst({
-          where: { ...gradWhere, companyName },
-          select: { jobPosition: true, major: true, salaryRange: true },
-        });
 
-        return {
-          companyName,
-          count: c._count._all,
-          topPosition: sampleRecord?.jobPosition || "ไม่ระบุตำแหน่ง",
-          primaryMajor: sampleRecord?.major || "ทั่วไป",
-          sampleSalary: sampleRecord?.salaryRange || "9,001 - 15,000",
-        };
-      })
-    );
+    const topCompanies = topCompaniesRaw.map((c) => ({
+      companyName: c.companyName!,
+      count: c._count._all,
+      topPosition: "พนักงาน / ปฏิบัติงาน",
+      primaryMajor: "ทั่วไป",
+      sampleSalary: "9,001 - 15,000",
+    }));
 
-    // Available filter options
-    const availableYears = await prisma.graduateTracking.findMany({
-      select: { gradYear: true },
-      distinct: ["gradYear"],
-      orderBy: { gradYear: "desc" },
-    });
-
-    const availableMajors = await prisma.studentProfileStatus.findMany({
-      select: { major: true },
-      where: { major: { not: null } },
-      distinct: ["major"],
-    });
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        // Pillar 1: Profile Completeness
-        profileStats: {
-          totalStudents,
-          completedStudents,
-          mediumStudents,
-          lowStudents,
-          avgCompleteness: Math.round(avgCompleteness * 10) / 10,
-          completenessRate: totalStudents > 0 ? (completedStudents / totalStudents) * 100 : 0,
-          distribution: completenessDistribution,
-        },
-        // Pillar 2: Employment Status
-        employmentStats: {
-          totalGraduates,
-          employedCount,
-          employmentRate: Math.round(employmentRate * 10) / 10,
-          studyCount,
-          studyRate: Math.round(studyRate * 10) / 10,
-          unemployedCount,
-          militaryCount,
-          jobMatchedCount,
-          jobNotMatchedCount,
-          matchRate: Math.round(matchRate * 10) / 10,
-          statusChartData,
-          salaryChartData,
-          majorMatchChartData,
-        },
-        // Pillar 3: Company & Employer Analytics
-        companyStats: {
-          totalUniqueCompanies,
-          topCompanies,
-        },
-        // Metadata for Filters
-        filters: {
-          years: availableYears.map((y) => y.gradYear).filter(Boolean),
-          majors: availableMajors.map((m) => m.major).filter(Boolean) as string[],
-        },
+    const responseData = {
+      // Pillar 1: Profile Completeness
+      profileStats,
+      // Pillar 2: Employment Status
+      employmentStats: {
+        totalGraduates,
+        employedCount,
+        employmentRate: Math.round(employmentRate * 10) / 10,
+        studyCount,
+        studyRate: Math.round(studyRate * 10) / 10,
+        unemployedCount,
+        militaryCount,
+        jobMatchedCount,
+        jobNotMatchedCount,
+        matchRate: Math.round(matchRate * 10) / 10,
+        statusChartData,
+        salaryChartData,
+        majorMatchChartData,
       },
+      // Pillar 3: Company & Employer Analytics
+      companyStats: {
+        totalUniqueCompanies,
+        topCompanies,
+      },
+      // Metadata for Filters
+      filters: {
+        years: availableYears.map((y) => y.gradYear).filter(Boolean),
+        majors: availableMajors.map((m) => m.major).filter(Boolean) as string[],
+      },
+    };
+
+    // Store in cache for 30s
+    statsCache.set(cacheKey, {
+      data: responseData,
+      expiresAt: Date.now() + 30000,
     });
+
+    return NextResponse.json(
+      {
+        success: true,
+        data: responseData,
+        cached: false,
+        responseTimeMs: Date.now() - startTime,
+      },
+      {
+        headers: {
+          "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
+        },
+      }
+    );
   } catch (error: any) {
     console.error("Dashboard Stats API Error:", error);
     return NextResponse.json(

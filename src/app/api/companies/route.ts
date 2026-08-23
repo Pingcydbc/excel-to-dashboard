@@ -42,38 +42,49 @@ export async function GET(req: NextRequest) {
       ? companyGroups
       : companyGroups.slice((page - 1) * limit, page * limit);
 
-    // Enrich each company with details
-    const enrichedCompanies = await Promise.all(
-      paginatedCompanies.map(async (c) => {
-        const name = c.companyName!;
-        const records = await prisma.graduateTracking.findMany({
-          where: { ...where, companyName: name },
-          select: {
-            jobPosition: true,
-            major: true,
-            salaryRange: true,
-            jobMajorMatch: true,
-            educationLevel: true,
-          },
-        });
+    // Enrich companies with a single batch query
+    const companyNames = paginatedCompanies.map((c) => c.companyName!).filter(Boolean);
+    const records = await prisma.graduateTracking.findMany({
+      where: { ...where, companyName: { in: companyNames } },
+      select: {
+        companyName: true,
+        jobPosition: true,
+        major: true,
+        salaryRange: true,
+        jobMajorMatch: true,
+        educationLevel: true,
+      },
+    });
 
-        const positions = Array.from(new Set(records.map((r) => r.jobPosition).filter(Boolean)));
-        const majors = Array.from(new Set(records.map((r) => r.major).filter(Boolean)));
-        const matchedCount = records.filter(
-          (r) => r.jobMajorMatch?.includes("ตรง") && !r.jobMajorMatch?.includes("ไม่ตรง")
-        ).length;
-        const matchRate = records.length > 0 ? (matchedCount / records.length) * 100 : 0;
+    const recordsByCompany = new Map<string, any[]>();
+    for (const r of records) {
+      if (!r.companyName) continue;
+      if (!recordsByCompany.has(r.companyName)) {
+        recordsByCompany.set(r.companyName, []);
+      }
+      recordsByCompany.get(r.companyName)!.push(r);
+    }
 
-        return {
-          companyName: name,
-          hiredCount: c._count._all,
-          positions: positions.slice(0, 3),
-          majors: majors.slice(0, 3),
-          sampleSalary: records[0]?.salaryRange || "-",
-          matchRate: Math.round(matchRate * 10) / 10,
-        };
-      })
-    );
+    const enrichedCompanies = paginatedCompanies.map((c) => {
+      const name = c.companyName!;
+      const compRecords = recordsByCompany.get(name) || [];
+      const positions = Array.from(new Set(compRecords.map((r) => r.jobPosition).filter(Boolean))) as string[];
+      const majors = Array.from(new Set(compRecords.map((r) => r.major).filter(Boolean))) as string[];
+      const matchedCount = compRecords.filter(
+        (r) => r.jobMajorMatch && r.jobMajorMatch.includes("ตรง") && !r.jobMajorMatch.includes("ไม่ตรง")
+      ).length;
+      const matchRate = compRecords.length > 0 ? Math.round((matchedCount / compRecords.length) * 1000) / 10 : 0;
+      const sampleSalary = compRecords.find((r) => r.salaryRange)?.salaryRange || "-";
+
+      return {
+        companyName: name,
+        hiredCount: c._count._all,
+        positions: positions.slice(0, 3),
+        majors: majors.slice(0, 3),
+        matchRate,
+        sampleSalary,
+      };
+    });
 
     return NextResponse.json({
       success: true,
