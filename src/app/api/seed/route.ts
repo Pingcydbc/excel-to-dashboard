@@ -17,7 +17,7 @@ export async function POST() {
     if (fs.existsSync(profileFile)) {
       const buf = fs.readFileSync(profileFile);
       const { records } = parseProfileStatusExcel(buf);
-      const chunkSize = 250;
+      const chunkSize = 30;
       for (let i = 0; i < records.length; i += chunkSize) {
         const chunk = records.slice(i, i + chunkSize);
         await Promise.all(
@@ -36,7 +36,7 @@ export async function POST() {
     if (fs.existsSync(graduateFile)) {
       const buf = fs.readFileSync(graduateFile);
       const { records } = parseGraduateTrackingExcel(buf);
-      const chunkSize = 250;
+      const chunkSize = 30;
       for (let i = 0; i < records.length; i += chunkSize) {
         const chunk = records.slice(i, i + chunkSize);
         await Promise.all(

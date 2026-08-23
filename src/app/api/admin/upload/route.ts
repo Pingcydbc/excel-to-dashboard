@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
 
       // Upsert in batches of 250 for speed
       let savedCount = 0;
-      const chunkSize = 250;
+      const chunkSize = 30;
       for (let i = 0; i < records.length; i += chunkSize) {
         const chunk = records.slice(i, i + chunkSize);
         await Promise.all(
@@ -140,7 +140,7 @@ export async function POST(req: NextRequest) {
       });
 
       let savedCount = 0;
-      const chunkSize = 250;
+      const chunkSize = 30;
       for (let i = 0; i < records.length; i += chunkSize) {
         const chunk = records.slice(i, i + chunkSize);
         await Promise.all(
