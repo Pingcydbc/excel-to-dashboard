@@ -1,0 +1,92 @@
+// prisma/schema.prisma
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model StudentProfileStatus {
+  id                String    @id @default(uuid())
+  studentId         String    @unique // รหัสนักศึกษา
+  prefix            String?   // คำนำหน้า (นาย, นางสาว)
+  firstName         String    // ชื่อ
+  lastName          String    // นามสกุล
+  educationLevel    String    // ระดับการศึกษา (เช่น ปวช., ปวส.)
+  faculty           String?   // ประเภทวิชา (เช่น อุตสาหกรรม, พาณิชยกรรม)
+  major             String?   // สาขาวิชา (เช่น เทคโนโลยีสารสนเทศ, ไฟฟ้ากำลัง)
+  minor             String?   // สาขางาน (เช่น เทคโนโลยีสารสนเทศ, การติดตั้งไฟฟ้า)
+  lastProfileUpdate DateTime? // วันที่อัปเดตโปรไฟล์ล่าสุด
+  completeness      Float     @default(0) // ความสมบูรณ์ของข้อมูล (%)
+  uploadLogId       String?   // ID ของรอบการอัปโหลดไฟล์
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([educationLevel])
+  @@index([major])
+  @@index([completeness])
+  @@index([uploadLogId])
+}
+
+model GraduateTracking {
+  id                 String   @id @default(uuid())
+  studentId          String   // รหัสนักศึกษา
+  fullName           String   // ชื่อ-นามสกุล
+  citizenId          String?  // เลขประจำตัวประชาชน
+  educationLevel     String   // ระดับชั้น (ปวช., ปวส.)
+  faculty            String?  // ประเภทวิชา
+  major              String?  // สาขาวิชา
+  gradYear           Int      // ปีการศึกษาที่จบ (เช่น 2567, 2568)
+  gradTerm           String?  // เทอมที่จบ (1, 2, ภาคฤดูร้อน)
+  trackingStatus     String?  // สถานะการติดตาม (มีงานทำ, ศึกษาต่อ, ว่างงาน, เกณฑ์ทหาร, ประกอบอาชีพอิสระ)
+  
+  // ข้อมูลการศึกษาต่อ
+  furtherStudyLevel  String?  // ศึกษาต่อระดับ (ปริญญาตรี, ปวส., อื่นๆ)
+  instituteName      String?  // ชื่อสถานศึกษาที่ศึกษาต่อ
+  studyMajorMatch    String?  // สาขาที่ศึกษาต่อตรงสาย (ตรงสาย, ไม่ตรงสาย)
+  
+  // ข้อมูลการทำงาน
+  companyName        String?  // ชื่อสถานประกอบการ / หน่วยงาน
+  jobPosition        String?  // ตำแหน่งงาน
+  salaryRange        String?  // ช่วงเงินเดือน (เช่น ต่ำกว่า 9,000, 9,001 - 15,000, 15,001 - 25,000, มากกว่า 25,000)
+  jobMajorMatch      String?  // การทำงานตรงสาขา (ตรงสาย, ไม่ตรงสาย)
+  
+  uploadLogId        String?  // ID ของรอบการอัปโหลดไฟล์
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([studentId, gradYear])
+  @@index([gradYear])
+  @@index([educationLevel])
+  @@index([major])
+  @@index([trackingStatus])
+  @@index([companyName])
+  @@index([jobMajorMatch])
+  @@index([uploadLogId])
+}
+
+model AdminUser {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String   // Hashed Password (bcrypt)
+  name      String   @default("ผู้ดูแลระบบ")
+  role      String   @default("ADMIN")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UploadLog {
+  id          String   @id @default(uuid())
+  fileName    String
+  fileType    String   // 'profile_status' | 'graduate_tracking'
+  fileSize    String?  // ขนาดไฟล์ เช่น '3.8 MB'
+  recordCount Int      @default(0)
+  durationMs  Int?     // เวลาที่ใช้ในการประมวลผล (มิลลิวินาที)
+  status      String   @default("SUCCESS") // 'SUCCESS' | 'FAILED'
+  message     String?
+  uploadedBy  String?  @default("Admin")
+  createdAt   DateTime @default(now())
+}
