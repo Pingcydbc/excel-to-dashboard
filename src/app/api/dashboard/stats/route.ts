@@ -6,10 +6,6 @@ export const dynamic = "force-dynamic";
 // In-memory cache for dashboard stats (TTL: 30 seconds)
 const statsCache = new Map<string, { data: any; expiresAt: number }>();
 
-export function clearStatsCache() {
-  statsCache.clear();
-}
-
 export async function GET(req: NextRequest) {
   const startTime = Date.now();
   try {
