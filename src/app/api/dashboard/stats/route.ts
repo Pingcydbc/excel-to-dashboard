@@ -195,13 +195,7 @@ export async function GET(req: NextRequest) {
           ...gradWhere,
           companyName: { not: null },
         },
-        _count: { _all: true },
-        orderBy: {
-          _count: {
-            companyName: "desc",
-          },
-        },
-        take: 30,
+        _count: { companyName: true },
       }),
       prisma.graduateTracking.findMany({
         select: { gradYear: true },
@@ -318,15 +312,16 @@ export async function GET(req: NextRequest) {
       .slice(0, 8);
 
     // Process Companies
-    const validCompanies = companyGroups.filter(
-      (c) => c.companyName && c.companyName.trim() !== "" && c.companyName !== "-"
-    );
+    const validCompanies = companyGroups
+      .filter((c) => c.companyName && c.companyName.trim() !== "" && c.companyName !== "-")
+      .sort((a, b) => (b._count.companyName || 0) - (a._count.companyName || 0));
+
     const totalUniqueCompanies = validCompanies.length;
     const topCompaniesRaw = validCompanies.slice(0, 10);
 
     const topCompanies = topCompaniesRaw.map((c) => ({
       companyName: c.companyName!,
-      count: c._count._all,
+      count: c._count.companyName || 0,
       topPosition: "พนักงาน / ปฏิบัติงาน",
       primaryMajor: "ทั่วไป",
       sampleSalary: "9,001 - 15,000",
