@@ -54,12 +54,12 @@ async function main() {
   console.log("🌱 Starting database seeding...");
 
   // 1. Create Default Admin User
-  const adminPassword = await bcrypt.hash("admin123", 10);
+  const adminPassword = await bcrypt.hash("admin1234", 10);
   const admin = await prisma.adminUser.upsert({
-    where: { email: "admin@dashboard.local" },
+    where: { email: "admin@gmail.com" },
     update: { password: adminPassword },
     create: {
-      email: "admin@dashboard.local",
+      email: "admin@gmail.com",
       password: adminPassword,
       name: "ผู้ดูแลระบบ (Admin)",
       role: "ADMIN",
