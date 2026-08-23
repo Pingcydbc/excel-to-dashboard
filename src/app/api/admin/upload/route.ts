@@ -71,21 +71,19 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // Upsert in batches of 250 for speed
+      // Bulk insert in chunks of 2000 for ultra-fast performance on Cloud / Serverless
       let savedCount = 0;
-      const chunkSize = 30;
+      const chunkSize = 2000;
       for (let i = 0; i < records.length; i += chunkSize) {
         const chunk = records.slice(i, i + chunkSize);
-        await Promise.all(
-          chunk.map((item) =>
-            prisma.studentProfileStatus.upsert({
-              where: { studentId: item.studentId },
-              update: { ...item, uploadLogId: uploadLog.id },
-              create: { ...item, uploadLogId: uploadLog.id },
-            })
-          )
-        );
-        savedCount += chunk.length;
+        const res = await prisma.studentProfileStatus.createMany({
+          data: chunk.map((item) => ({
+            ...item,
+            uploadLogId: uploadLog.id,
+          })),
+          skipDuplicates: true,
+        });
+        savedCount += res.count;
       }
 
       const durationMs = Date.now() - startTime;
@@ -140,30 +138,17 @@ export async function POST(req: NextRequest) {
       });
 
       let savedCount = 0;
-      const chunkSize = 30;
+      const chunkSize = 2000;
       for (let i = 0; i < records.length; i += chunkSize) {
         const chunk = records.slice(i, i + chunkSize);
-        await Promise.all(
-          chunk.map((item) =>
-            prisma.graduateTracking.upsert({
-              where: {
-                studentId_gradYear: {
-                  studentId: item.studentId,
-                  gradYear: item.gradYear,
-                },
-              },
-              update: {
-                ...item,
-                uploadLogId: uploadLog.id,
-              },
-              create: {
-                ...item,
-                uploadLogId: uploadLog.id,
-              },
-            })
-          )
-        );
-        savedCount += chunk.length;
+        const res = await prisma.graduateTracking.createMany({
+          data: chunk.map((item) => ({
+            ...item,
+            uploadLogId: uploadLog.id,
+          })),
+          skipDuplicates: true,
+        });
+        savedCount += res.count;
       }
 
       const durationMs = Date.now() - startTime;
