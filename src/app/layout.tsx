@@ -38,7 +38,7 @@ export default function RootLayout({
             <p className="text-slate-500">
               ออกแบบและพัฒนาโดย{" "}
               <a
-                href="http://itc.cmtc.ac.th/"
+                href="http://it.cmtc.ac.th/"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-indigo-600 hover:text-indigo-800 font-semibold underline underline-offset-2 transition"

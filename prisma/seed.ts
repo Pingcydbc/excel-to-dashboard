@@ -53,13 +53,15 @@ function parseDate(val: any): Date | null {
 async function main() {
   console.log("🌱 Starting database seeding...");
 
-  // 1. Create Default Admin User
-  const adminPassword = await bcrypt.hash("admin1234", 10);
+  // 1. Create Default Admin User from Environment
+  const adminEmail = (process.env.ADMIN_EMAIL || "admin@gmail.com").trim().toLowerCase();
+  const adminRawPassword = process.env.ADMIN_PASSWORD || "admincmtcvcop123";
+  const adminPassword = await bcrypt.hash(adminRawPassword, 10);
   const admin = await prisma.adminUser.upsert({
-    where: { email: "admin@gmail.com" },
+    where: { email: adminEmail },
     update: { password: adminPassword },
     create: {
-      email: "admin@gmail.com",
+      email: adminEmail,
       password: adminPassword,
       name: "ผู้ดูแลระบบ (Admin)",
       role: "ADMIN",

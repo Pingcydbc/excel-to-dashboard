@@ -14,19 +14,21 @@ export async function POST(req: NextRequest) {
     }
 
     const cleanEmail = email.trim().toLowerCase();
+    const envAdminEmail = (process.env.ADMIN_EMAIL || "admin@gmail.com").trim().toLowerCase();
+    const envAdminPassword = process.env.ADMIN_PASSWORD || "admincmtcvcop123";
 
     let admin = await prisma.adminUser.findUnique({
       where: { email: cleanEmail },
     });
 
-    // Auto-create initial admin on fresh database if no admin exists yet
+    // Auto-create initial admin on fresh database if matching env credentials
     if (!admin) {
       const adminCount = await prisma.adminUser.count();
-      if (adminCount === 0 && cleanEmail === "admin@gmail.com" && password === "admin1234") {
-        const hashedPassword = hashPassword("admin1234");
+      if (adminCount === 0 && cleanEmail === envAdminEmail && password === envAdminPassword) {
+        const hashedPassword = hashPassword(envAdminPassword);
         admin = await prisma.adminUser.create({
           data: {
-            email: "admin@gmail.com",
+            email: envAdminEmail,
             password: hashedPassword,
             name: "ผู้ดูแลระบบ (Admin)",
             role: "ADMIN",

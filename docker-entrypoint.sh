@@ -8,19 +8,21 @@ if [ -n "$DATABASE_URL" ]; then
   echo "📦 Syncing Prisma Database Schema..."
   npx prisma db push --accept-data-loss || true
   
-  echo "👤 Ensuring Default Admin User (admin@gmail.com)..."
+  echo "👤 Ensuring Admin Account from Environment..."
   node -e "
     const { PrismaClient } = require('@prisma/client');
     const bcrypt = require('bcryptjs');
     const prisma = new PrismaClient();
     async function initAdmin() {
       try {
-        const hash = bcrypt.hashSync('admin1234', 10);
+        const email = (process.env.ADMIN_EMAIL || 'admin@gmail.com').trim().toLowerCase();
+        const password = process.env.ADMIN_PASSWORD || 'admincmtcvcop123';
+        const hash = bcrypt.hashSync(password, 10);
         const admin = await prisma.adminUser.upsert({
-          where: { email: 'admin@gmail.com' },
+          where: { email },
           update: { password: hash },
           create: {
-            email: 'admin@gmail.com',
+            email,
             password: hash,
             name: 'ผู้ดูแลระบบ (Admin)',
             role: 'ADMIN'

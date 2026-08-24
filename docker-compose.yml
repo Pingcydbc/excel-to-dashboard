@@ -35,8 +35,10 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - DATABASE_URL=postgresql://postgres:password123@postgres-db:5432/student_dashboard?schema=public
-      - JWT_SECRET=super_secret_jwt_key_2026_excel_to_dashboard
-      - NEXT_PUBLIC_APP_URL=http://localhost:3000
+      - JWT_SECRET=${JWT_SECRET:-super_secret_jwt_key_2026_excel_to_dashboard}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@gmail.com}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admincmtcvcop123}
     depends_on:
       postgres-db:
         condition: service_healthy
