@@ -11,8 +11,8 @@ const prompt = Prompt({
 });
 
 export const metadata: Metadata = {
-  title: "V-COP CMTC Dashboard | วิทยาลัยเทคนิคเชียงใหม่",
-  description: "V-COP CMTC Dashboard แดชบอร์ดสรุปผลการปรับปรุงข้อมูลนักเรียน นักศึกษา ภาวะการมีงานทำ และสถิติสถานประกอบการ วิทยาลัยเทคนิคเชียงใหม่",
+  title: "V-COP CMTC Dashboard",
+  description: "V-COP CMTC Dashboard ระบบรายงานและวิเคราะห์ข้อมูลสถานะการปรับปรุงข้อมูลนักศึกษา ภาวะการมีงานทำ และสถิติสถานประกอบการ",
   icons: {
     icon: "/logo.png",
   },
