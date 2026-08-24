@@ -67,11 +67,11 @@ export default function Navbar() {
                 />
               </div>
               <div className="flex flex-col">
-                <span className="font-bold text-base sm:text-lg text-slate-900 group-hover:text-indigo-600 transition tracking-tight leading-tight">
-                  วิทยาลัยเทคนิคเชียงใหม่
+                <span className="font-extrabold text-base sm:text-lg text-slate-900 group-hover:text-indigo-600 transition tracking-tight leading-tight">
+                  V-COP CMTC <span className="text-indigo-600">Dashboard</span>
                 </span>
                 <span className="text-[11px] text-slate-500 font-medium hidden sm:inline-block">
-                  ระบบสารสนเทศและแดชบอร์ดข้อมูล (Excel to Dashboard)
+                  วิทยาลัยเทคนิคเชียงใหม่
                 </span>
               </div>
             </Link>

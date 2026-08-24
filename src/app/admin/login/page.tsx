@@ -39,14 +39,15 @@ export default function AdminLoginPage() {
       <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-3xl border border-slate-200 shadow-xl">
         {/* Header */}
         <div className="text-center">
-          <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-3 shadow-inner">
-            <ShieldCheck className="w-8 h-8" />
+          <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center mx-auto mb-3 shadow-sm border border-slate-100 p-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.png" alt="ตราวิทยาลัยเทคนิคเชียงใหม่" className="w-12 h-12 object-contain drop-shadow-sm" />
           </div>
           <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">
             เข้าสู่ระบบผู้ดูแลระบบ
           </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Admin Portal เพื่อจัดการและนำเข้าไฟล์ Excel สู่ฐานข้อมูล
+          <p className="text-xs text-slate-500 mt-1 font-medium">
+            V-COP CMTC Dashboard • วิทยาลัยเทคนิคเชียงใหม่
           </p>
         </div>
 

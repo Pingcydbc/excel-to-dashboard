@@ -70,15 +70,15 @@ export default function OverviewDashboardPage() {
         <div>
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-              Overview Dashboard
+              V-COP CMTC Dashboard
             </span>
-            <span className="text-xs text-slate-400">อัปเดตล่าสุด ณ วันที่ 23 สิงหาคม 2569</span>
+            <span className="text-xs text-slate-400">วิทยาลัยเทคนิคเชียงใหม่</span>
           </div>
           <h1 className="text-2xl font-extrabold text-slate-900 mt-1 tracking-tight">
             ภาพรวมรายงานสถานะนักศึกษาและภาวะการมีงานทำ
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            สรุปข้อมูล 3 เสาหลัก: สถานะการปรับปรุงข้อมูล • สถานะการมีงานทำ • สถิติสถานประกอบการ
+            ระบบติดตาม 3 เสาหลัก: สถานะการปรับปรุงข้อมูล (ศธ.02) • ภาวะการมีงานทำ • สถิติสถานประกอบการ
           </p>
         </div>
       </div>
