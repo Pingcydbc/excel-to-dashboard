@@ -8,28 +8,27 @@ if [ -n "$DATABASE_URL" ]; then
   echo "📦 Syncing Prisma Database Schema..."
   npx prisma db push --accept-data-loss || true
   
-  echo "👤 Ensuring Default Admin User..."
+  echo "👤 Ensuring Default Admin User (admin@gmail.com)..."
   node -e "
     const { PrismaClient } = require('@prisma/client');
     const bcrypt = require('bcryptjs');
     const prisma = new PrismaClient();
     async function initAdmin() {
       try {
-        const count = await prisma.adminUser.count();
-        if (count === 0) {
-          const hash = bcrypt.hashSync('admin1234', 10);
-          await prisma.adminUser.create({
-            data: {
-              email: 'admin@gmail.com',
-              password: hash,
-              name: 'ผู้ดูแลระบบ (Admin)',
-              role: 'ADMIN'
-            }
-          });
-          console.log('✅ Default Admin created: admin@gmail.com');
-        }
+        const hash = bcrypt.hashSync('admin1234', 10);
+        const admin = await prisma.adminUser.upsert({
+          where: { email: 'admin@gmail.com' },
+          update: { password: hash },
+          create: {
+            email: 'admin@gmail.com',
+            password: hash,
+            name: 'ผู้ดูแลระบบ (Admin)',
+            role: 'ADMIN'
+          }
+        });
+        console.log('✅ Admin Account Ready:', admin.email);
       } catch (e) {
-        console.warn('Admin init check warning:', e.message);
+        console.warn('Admin init warning:', e.message);
       } finally {
         await prisma.\$disconnect();
       }
