@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-echo "🚀 Starting Excel to Dashboard App..."
+echo "🚀 Starting V-COP CMTC Dashboard App..."
 
 # Push Prisma Schema to database if DATABASE_URL is available
 if [ -n "$DATABASE_URL" ]; then

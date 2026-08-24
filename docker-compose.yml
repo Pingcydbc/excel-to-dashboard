@@ -1,17 +1,17 @@
 version: '3.8'
 
 services:
-  # PostgreSQL Database Container
+  # PostgreSQL 16 Database Service
   postgres-db:
     image: postgres:16-alpine
-    container_name: student_dashboard_db
+    container_name: vcop_cmtc_db
     restart: always
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password123
       POSTGRES_DB: student_dashboard
     ports:
-      - "5435:5432"
+      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -20,31 +20,31 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - dashboard-net
+      - vcop-net
 
-  # Next.js Application Container
-  dashboard-web:
+  # V-COP CMTC Next.js Web Service
+  vcop-web:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: student_dashboard_web
+    container_name: vcop_cmtc_web
     restart: always
     ports:
-      - "3001:3000"
+      - "3000:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
       - DATABASE_URL=postgresql://postgres:password123@postgres-db:5432/student_dashboard?schema=public
       - JWT_SECRET=super_secret_jwt_key_2026_excel_to_dashboard
-      - NEXT_PUBLIC_APP_URL=http://localhost:3001
+      - NEXT_PUBLIC_APP_URL=http://localhost:3000
     depends_on:
       postgres-db:
         condition: service_healthy
     networks:
-      - dashboard-net
+      - vcop-net
 
 networks:
-  dashboard-net:
+  vcop-net:
     driver: bridge
 
 volumes:
