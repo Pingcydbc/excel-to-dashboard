@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { comparePassword, signToken } from "@/lib/auth";
+import { comparePassword, hashPassword, signToken } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,9 +13,27 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const admin = await prisma.adminUser.findUnique({
-      where: { email: email.trim().toLowerCase() },
+    const cleanEmail = email.trim().toLowerCase();
+
+    let admin = await prisma.adminUser.findUnique({
+      where: { email: cleanEmail },
     });
+
+    // Auto-create initial admin on fresh database if no admin exists yet
+    if (!admin) {
+      const adminCount = await prisma.adminUser.count();
+      if (adminCount === 0 && cleanEmail === "admin@gmail.com" && password === "admin1234") {
+        const hashedPassword = hashPassword("admin1234");
+        admin = await prisma.adminUser.create({
+          data: {
+            email: "admin@gmail.com",
+            password: hashedPassword,
+            name: "ผู้ดูแลระบบ (Admin)",
+            role: "ADMIN",
+          },
+        });
+      }
+    }
 
     if (!admin) {
       return NextResponse.json(
