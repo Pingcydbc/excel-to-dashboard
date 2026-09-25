@@ -1,17 +1,17 @@
-version: '3.8'
-
 services:
-  # PostgreSQL 16 Database Service
+  # ====================================================
+  # 1. PostgreSQL 16 Database Service
+  # ====================================================
   postgres-db:
     image: postgres:16-alpine
     container_name: vcop_cmtc_db
     restart: always
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password123
-      POSTGRES_DB: student_dashboard
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password123}
+      POSTGRES_DB: ${DB_NAME:-student_dashboard}
     ports:
-      - "5432:5432"
+      - "${HOST_DB_PORT:-5435}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -22,7 +22,9 @@ services:
     networks:
       - vcop-net
 
-  # V-COP CMTC Next.js Web Service
+  # ====================================================
+  # 2. V-COP CMTC Next.js Web Application
+  # ====================================================
   vcop-web:
     build:
       context: .
@@ -34,9 +36,9 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - DATABASE_URL=postgresql://postgres:password123@postgres-db:5432/student_dashboard?schema=public
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password123}@postgres-db:5432/${DB_NAME:-student_dashboard}?schema=public
       - JWT_SECRET=${JWT_SECRET:-super_secret_jwt_key_2026_excel_to_dashboard}
-      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://v-cop.cmtc.ac.th}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@gmail.com}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admincmtcvcop123}
     depends_on:
@@ -51,3 +53,4 @@ networks:
 
 volumes:
   pgdata:
+    name: vcop_cmtc_pgdata
