@@ -30,7 +30,15 @@ export async function GET(req: NextRequest) {
     // Profile Status filters
     const profileWhere: any = {};
     if (levelParam !== "all") {
-      profileWhere.educationLevel = { contains: levelParam };
+      if (levelParam.includes("ตรี") || levelParam.includes("ปริญญา")) {
+        profileWhere.OR = [
+          { educationLevel: { contains: "ป.ตรี" } },
+          { educationLevel: { contains: "ปริญญา" } },
+          { educationLevel: { contains: "ทล.บ." } },
+        ];
+      } else {
+        profileWhere.educationLevel = { contains: levelParam };
+      }
     }
     if (majorParam !== "all") {
       profileWhere.major = { contains: majorParam };
@@ -45,7 +53,15 @@ export async function GET(req: NextRequest) {
       }
     }
     if (levelParam !== "all") {
-      gradWhere.educationLevel = { contains: levelParam };
+      if (levelParam.includes("ตรี") || levelParam.includes("ปริญญา")) {
+        gradWhere.OR = [
+          { educationLevel: { contains: "ป.ตรี" } },
+          { educationLevel: { contains: "ปริญญา" } },
+          { educationLevel: { contains: "ทล.บ." } },
+        ];
+      } else {
+        gradWhere.educationLevel = { contains: levelParam };
+      }
     }
     if (majorParam !== "all") {
       gradWhere.major = { contains: majorParam };
@@ -59,8 +75,14 @@ export async function GET(req: NextRequest) {
       let pIdx = 1;
 
       if (levelParam !== "all") {
-        whereClause += ` AND "educationLevel" ILIKE $${pIdx++}`;
-        params.push(`%${levelParam}%`);
+        if (levelParam.includes("ตรี") || levelParam.includes("ปริญญา")) {
+          whereClause += ` AND ("educationLevel" ILIKE $${pIdx} OR "educationLevel" ILIKE $${pIdx + 1} OR "educationLevel" ILIKE $${pIdx + 2})`;
+          params.push(`%ป.ตรี%`, `%ปริญญา%`, `%ทล.บ.%`);
+          pIdx += 3;
+        } else {
+          whereClause += ` AND "educationLevel" ILIKE $${pIdx++}`;
+          params.push(`%${levelParam}%`);
+        }
       }
       if (majorParam !== "all") {
         whereClause += ` AND "major" ILIKE $${pIdx++}`;

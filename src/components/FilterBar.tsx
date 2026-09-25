@@ -74,6 +74,7 @@ export default function FilterBar({
               <option value="all">ทุกระดับชั้น</option>
               <option value="ปวช">ปวช.</option>
               <option value="ปวส">ปวส.</option>
+              <option value="ป.ตรี">ป.ตรี</option>
             </select>
           </div>
 

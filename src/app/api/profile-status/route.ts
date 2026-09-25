@@ -26,7 +26,15 @@ export async function GET(req: NextRequest) {
     }
 
     if (level && level !== "all") {
-      where.educationLevel = { contains: level };
+      if (level.includes("ตรี") || level.includes("ปริญญา")) {
+        where.OR = [
+          { educationLevel: { contains: "ป.ตรี" } },
+          { educationLevel: { contains: "ปริญญา" } },
+          { educationLevel: { contains: "ทล.บ." } },
+        ];
+      } else {
+        where.educationLevel = { contains: level };
+      }
     }
 
     if (major && major !== "all") {

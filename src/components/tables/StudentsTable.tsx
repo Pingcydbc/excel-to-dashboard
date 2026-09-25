@@ -138,7 +138,15 @@ export default function StudentsTable({
                     {student.firstName} {student.lastName}
                   </td>
                   <td className="px-4 py-3">
-                    <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-medium">
+                    <span
+                      className={`inline-block px-2.5 py-0.5 rounded-md font-semibold text-[11px] ${
+                        student.educationLevel?.includes("ตรี") || student.educationLevel?.includes("ปริญญา")
+                          ? "bg-purple-50 text-purple-700 border border-purple-200"
+                          : student.educationLevel?.includes("ปวส")
+                          ? "bg-blue-50 text-blue-700 border border-blue-200"
+                          : "bg-amber-50 text-amber-700 border border-amber-200"
+                      }`}
+                    >
                       {student.educationLevel}
                     </span>
                   </td>

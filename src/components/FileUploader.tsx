@@ -179,7 +179,7 @@ export default function FileUploader({ onUploadSuccess }: { onUploadSuccess?: ()
                 ไฟล์สถานะการปรับปรุงข้อมูลนักเรียน นักศึกษา
               </div>
               <p className="text-xs text-slate-500 mt-1">
-                รายงานความสมบูรณ์โปรไฟล์ (Completeness %), ระดับชั้น (ปวช./ปวส.), สาขาวิชา, วันที่อัปเดตล่าสุด
+                รายงานความสมบูรณ์โปรไฟล์ (Completeness %), ระดับชั้น (ปวช./ปวส./ป.ตรี), สาขาวิชา, วันที่อัปเดตล่าสุด
               </p>
             </div>
           </label>

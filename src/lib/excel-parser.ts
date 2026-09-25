@@ -45,7 +45,7 @@ export function normalizeLevel(val: string): string {
   const s = cleanStr(val);
   if (s.includes("ปวส") || s.includes("ประกาศนียบัตรวิชาชีพชั้นสูง")) return "ปวส.";
   if (s.includes("ปวช") || s.includes("ประกาศนียบัตรวิชาชีพ")) return "ปวช.";
-  if (s.includes("ปริญญาตรี") || s.includes("ทล.บ.")) return "ปริญญาตรี";
+  if (s.includes("ปริญญา") || s.includes("ทล.บ.") || s.includes("ป.ตรี")) return "ป.ตรี";
   return s || "ปวช.";
 }
 
