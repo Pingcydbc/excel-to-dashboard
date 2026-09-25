@@ -302,14 +302,12 @@ export function parseGraduateTrackingExcel(buffer: Buffer | ArrayBuffer): {
         records.push({
           studentId: `${gradYear}G${String(counter++).padStart(5, "0")}`,
           fullName: `ผู้สำเร็จการศึกษา (${faculty})`,
-          educationLevel: "ปวส.",
+          educationLevel: "ตามประเภทวิชา",
           faculty,
           major: faculty,
           gradYear,
           gradTerm,
           trackingStatus: "ศึกษาต่อ",
-          furtherStudyLevel: "ปริญญาตรี",
-          instituteName: "ศึกษาต่อระดับปริญญาตรี",
           studyMajorMatch: "ตรงสาย",
         });
       }
@@ -317,14 +315,12 @@ export function parseGraduateTrackingExcel(buffer: Buffer | ArrayBuffer): {
         records.push({
           studentId: `${gradYear}G${String(counter++).padStart(5, "0")}`,
           fullName: `ผู้สำเร็จการศึกษา (${faculty})`,
-          educationLevel: "ปวส.",
+          educationLevel: "ตามประเภทวิชา",
           faculty,
           major: faculty,
           gradYear,
           gradTerm,
           trackingStatus: "ศึกษาต่อ",
-          furtherStudyLevel: "ปริญญาตรี",
-          instituteName: "ศึกษาต่อระดับปริญญาตรี",
           studyMajorMatch: "ไม่ตรงสาย",
         });
       }
@@ -334,7 +330,7 @@ export function parseGraduateTrackingExcel(buffer: Buffer | ArrayBuffer): {
         records.push({
           studentId: `${gradYear}G${String(counter++).padStart(5, "0")}`,
           fullName: `ผู้สำเร็จการศึกษา (${faculty})`,
-          educationLevel: "ปวส.",
+          educationLevel: "ตามประเภทวิชา",
           faculty,
           major: faculty,
           gradYear,
@@ -343,12 +339,12 @@ export function parseGraduateTrackingExcel(buffer: Buffer | ArrayBuffer): {
         });
       }
 
-      // 3. Employed
-      const empList: { comp: string; pos: string }[] = [];
-      for (let i = 0; i < stateEnterprise; i++) empList.push({ comp: "หน่วยงานรัฐวิสาหกิจ", pos: "พนักงานรัฐวิสาหกิจ" });
-      for (let i = 0; i < government; i++) empList.push({ comp: "หน่วยงานราชการ", pos: "ข้าราชการ/พนักงานราชการ" });
-      for (let i = 0; i < privateCompany; i++) empList.push({ comp: "บริษัทเอกชน", pos: "พนักงานบริษัทเอกชน" });
-      for (let i = 0; i < freelance; i++) empList.push({ comp: "ประกอบอาชีพอิสระ", pos: "ประกอบอาชีพอิสระ" });
+      // 3. Employed (จำแนกตามประเภทหน่วยงานที่มีในไฟล์: รัฐวิสาหกิจ, ราชการ, เอกชน, อาชีพอิสระ)
+      const empList: { comp: string }[] = [];
+      for (let i = 0; i < stateEnterprise; i++) empList.push({ comp: "รัฐวิสาหกิจ" });
+      for (let i = 0; i < government; i++) empList.push({ comp: "ราชการ" });
+      for (let i = 0; i < privateCompany; i++) empList.push({ comp: "เอกชน" });
+      for (let i = 0; i < freelance; i++) empList.push({ comp: "ประกอบอาชีพอิสระ" });
 
       let directRem = workDirect;
       for (const e of empList) {
@@ -357,15 +353,13 @@ export function parseGraduateTrackingExcel(buffer: Buffer | ArrayBuffer): {
         records.push({
           studentId: `${gradYear}G${String(counter++).padStart(5, "0")}`,
           fullName: `ผู้สำเร็จการศึกษา (${faculty})`,
-          educationLevel: "ปวส.",
+          educationLevel: "ตามประเภทวิชา",
           faculty,
           major: faculty,
           gradYear,
           gradTerm,
           trackingStatus: "มีงานทำ",
           companyName: e.comp,
-          jobPosition: e.pos,
-          salaryRange: "15,001 - 25,000",
           jobMajorMatch: isDirect ? "ตรงสาย" : "ไม่ตรงสาย",
         });
       }
@@ -375,12 +369,12 @@ export function parseGraduateTrackingExcel(buffer: Buffer | ArrayBuffer): {
         records.push({
           studentId: `${gradYear}G${String(counter++).padStart(5, "0")}`,
           fullName: `ผู้สำเร็จการศึกษา (${faculty})`,
-          educationLevel: "ปวส.",
+          educationLevel: "ตามประเภทวิชา",
           faculty,
           major: faculty,
           gradYear,
           gradTerm,
-          trackingStatus: "เกณฑ์ทหาร / อื่น ๆ",
+          trackingStatus: "อื่น ๆ",
         });
       }
     }
@@ -388,14 +382,11 @@ export function parseGraduateTrackingExcel(buffer: Buffer | ArrayBuffer): {
     const preview = records.slice(0, 10).map((r) => ({
       "รหัสนักศึกษา": r.studentId,
       "ชื่อ-นามสกุล": r.fullName,
-      "ระดับชั้น": r.educationLevel,
       "ประเภทวิชา": r.faculty || "-",
-      "สาขาวิชา": r.major || "-",
       "ปีการศึกษา": r.gradYear,
-      "สถานะ": r.trackingStatus || "-",
-      "สถานประกอบการ": r.companyName || (r.trackingStatus === "ศึกษาต่อ" ? r.instituteName : "-"),
-      "ตำแหน่งงาน": r.jobPosition || "-",
-      "ตรงสาย": r.jobMajorMatch || r.studyMajorMatch || "-",
+      "สถานะการติดตาม": r.trackingStatus || "-",
+      "ประเภทสถานที่ทำงาน": r.companyName || "-",
+      "ตรงวุฒิการศึกษา": r.jobMajorMatch || r.studyMajorMatch || "-",
     }));
 
     return { records, preview, totalRows: records.length };
