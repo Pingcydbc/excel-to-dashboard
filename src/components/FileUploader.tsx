@@ -41,9 +41,22 @@ export default function FileUploader({ onUploadSuccess }: { onUploadSuccess?: ()
     setFile(selectedFile);
     
     // Auto-detect file type from name
-    if (selectedFile.name.includes("ติดตาม") || selectedFile.name.includes("สำเร็จ")) {
+    const lowerName = selectedFile.name.toLowerCase();
+    if (
+      selectedFile.name.includes("ติดตาม") ||
+      selectedFile.name.includes("สำเร็จ") ||
+      lowerName.includes("tracking") ||
+      lowerName.includes("graduate") ||
+      lowerName.includes("employment")
+    ) {
       setFileType("graduate_tracking");
-    } else if (selectedFile.name.includes("ปรับปรุง") || selectedFile.name.includes("นักเรียน") || selectedFile.name.includes("นักศึกษา")) {
+    } else if (
+      selectedFile.name.includes("ปรับปรุง") ||
+      selectedFile.name.includes("นักเรียน") ||
+      selectedFile.name.includes("นักศึกษา") ||
+      lowerName.includes("student") ||
+      lowerName.includes("profilestatus")
+    ) {
       setFileType("profile_status");
     }
   };

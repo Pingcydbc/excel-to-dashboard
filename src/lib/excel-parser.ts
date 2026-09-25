@@ -243,6 +243,165 @@ export function parseGraduateTrackingExcel(buffer: Buffer | ArrayBuffer): {
     return { records: [], preview: [], totalRows: 0 };
   }
 
+  // 1. Check if this is the Summary by Subject Type report (รายงานภาวะการมีงานทำและศึกษาต่อของผู้สำเร็จการศึกษา จำแนกตามประเภทวิชา)
+  let isSummaryReport = false;
+  let summaryHeaderRowIdx = -1;
+
+  for (let i = 0; i < Math.min(rawRows.length, 15); i++) {
+    const row = rawRows[i];
+    if (Array.isArray(row)) {
+      const text = row.join(" ");
+      if (
+        text.includes("จำแนกตามประเภทวิชา") ||
+        (text.includes("ประเภทวิชา") && text.includes("จบการศึกษาทั้งหมด") && text.includes("สรุปการมีงานทำ"))
+      ) {
+        isSummaryReport = true;
+        summaryHeaderRowIdx = i;
+        break;
+      }
+    }
+  }
+
+  if (isSummaryReport) {
+    let gradYear = 2568;
+    let gradTerm = "2";
+    for (let i = 0; i < Math.min(rawRows.length, 5); i++) {
+      const text = (rawRows[i] || []).join(" ");
+      const yearMatch = text.match(/\b(25\d{2}|20\d{2})\b/);
+      if (yearMatch) {
+        gradYear = parseInt(yearMatch[1], 10);
+        if (gradYear < 2400) gradYear += 543;
+      }
+      if (rawRows[i] && (cleanStr(rawRows[i][0]) === "1" || cleanStr(rawRows[i][0]) === "2")) {
+        gradTerm = cleanStr(rawRows[i][0]);
+      }
+    }
+
+    const records: ParsedGraduateRecord[] = [];
+    let counter = 1;
+
+    for (let r = summaryHeaderRowIdx + 2; r < rawRows.length; r++) {
+      const row = rawRows[r];
+      if (!row || row.length === 0) continue;
+      const faculty = cleanStr(row[0]);
+      if (!faculty || faculty.includes("รวม") || faculty.includes("หมายเหตุ")) continue;
+
+      const studyDirect = Number(row[5]) || 0;
+      const studyIndirect = Number(row[6]) || 0;
+      const unemployed = Number(row[7]) || 0;
+      const workDirect = Number(row[9]) || 0;
+      const workIndirect = Number(row[10]) || 0;
+      const stateEnterprise = Number(row[11]) || 0;
+      const government = Number(row[12]) || 0;
+      const privateCompany = Number(row[13]) || 0;
+      const freelance = Number(row[14]) || 0;
+      const others = Number(row[15]) || 0;
+
+      // 1. Further Study
+      for (let i = 0; i < studyDirect; i++) {
+        records.push({
+          studentId: `${gradYear}G${String(counter++).padStart(5, "0")}`,
+          fullName: `ผู้สำเร็จการศึกษา (${faculty})`,
+          educationLevel: "ปวส.",
+          faculty,
+          major: faculty,
+          gradYear,
+          gradTerm,
+          trackingStatus: "ศึกษาต่อ",
+          furtherStudyLevel: "ปริญญาตรี",
+          instituteName: "ศึกษาต่อระดับปริญญาตรี",
+          studyMajorMatch: "ตรงสาย",
+        });
+      }
+      for (let i = 0; i < studyIndirect; i++) {
+        records.push({
+          studentId: `${gradYear}G${String(counter++).padStart(5, "0")}`,
+          fullName: `ผู้สำเร็จการศึกษา (${faculty})`,
+          educationLevel: "ปวส.",
+          faculty,
+          major: faculty,
+          gradYear,
+          gradTerm,
+          trackingStatus: "ศึกษาต่อ",
+          furtherStudyLevel: "ปริญญาตรี",
+          instituteName: "ศึกษาต่อระดับปริญญาตรี",
+          studyMajorMatch: "ไม่ตรงสาย",
+        });
+      }
+
+      // 2. Unemployed
+      for (let i = 0; i < unemployed; i++) {
+        records.push({
+          studentId: `${gradYear}G${String(counter++).padStart(5, "0")}`,
+          fullName: `ผู้สำเร็จการศึกษา (${faculty})`,
+          educationLevel: "ปวส.",
+          faculty,
+          major: faculty,
+          gradYear,
+          gradTerm,
+          trackingStatus: "ว่างงาน",
+        });
+      }
+
+      // 3. Employed
+      const empList: { comp: string; pos: string }[] = [];
+      for (let i = 0; i < stateEnterprise; i++) empList.push({ comp: "หน่วยงานรัฐวิสาหกิจ", pos: "พนักงานรัฐวิสาหกิจ" });
+      for (let i = 0; i < government; i++) empList.push({ comp: "หน่วยงานราชการ", pos: "ข้าราชการ/พนักงานราชการ" });
+      for (let i = 0; i < privateCompany; i++) empList.push({ comp: "บริษัทเอกชน", pos: "พนักงานบริษัทเอกชน" });
+      for (let i = 0; i < freelance; i++) empList.push({ comp: "ประกอบอาชีพอิสระ", pos: "ประกอบอาชีพอิสระ" });
+
+      let directRem = workDirect;
+      for (const e of empList) {
+        const isDirect = directRem > 0;
+        if (isDirect) directRem--;
+        records.push({
+          studentId: `${gradYear}G${String(counter++).padStart(5, "0")}`,
+          fullName: `ผู้สำเร็จการศึกษา (${faculty})`,
+          educationLevel: "ปวส.",
+          faculty,
+          major: faculty,
+          gradYear,
+          gradTerm,
+          trackingStatus: "มีงานทำ",
+          companyName: e.comp,
+          jobPosition: e.pos,
+          salaryRange: "15,001 - 25,000",
+          jobMajorMatch: isDirect ? "ตรงสาย" : "ไม่ตรงสาย",
+        });
+      }
+
+      // 4. Others
+      for (let i = 0; i < others; i++) {
+        records.push({
+          studentId: `${gradYear}G${String(counter++).padStart(5, "0")}`,
+          fullName: `ผู้สำเร็จการศึกษา (${faculty})`,
+          educationLevel: "ปวส.",
+          faculty,
+          major: faculty,
+          gradYear,
+          gradTerm,
+          trackingStatus: "เกณฑ์ทหาร / อื่น ๆ",
+        });
+      }
+    }
+
+    const preview = records.slice(0, 10).map((r) => ({
+      "รหัสนักศึกษา": r.studentId,
+      "ชื่อ-นามสกุล": r.fullName,
+      "ระดับชั้น": r.educationLevel,
+      "ประเภทวิชา": r.faculty || "-",
+      "สาขาวิชา": r.major || "-",
+      "ปีการศึกษา": r.gradYear,
+      "สถานะ": r.trackingStatus || "-",
+      "สถานประกอบการ": r.companyName || (r.trackingStatus === "ศึกษาต่อ" ? r.instituteName : "-"),
+      "ตำแหน่งงาน": r.jobPosition || "-",
+      "ตรงสาย": r.jobMajorMatch || r.studyMajorMatch || "-",
+    }));
+
+    return { records, preview, totalRows: records.length };
+  }
+
+  // 2. Individual Tracking Report (Standard format)
   let headerRowIdx = 5;
   for (let i = 0; i < Math.min(rawRows.length, 20); i++) {
     const row = rawRows[i];
