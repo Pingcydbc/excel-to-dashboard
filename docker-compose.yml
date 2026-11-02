@@ -36,7 +36,12 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password123}@postgres-db:5432/${DB_NAME:-student_dashboard}?schema=public
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-password123}
+      - DB_HOST=${DB_HOST:-postgres-db}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-student_dashboard}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password123}@postgres-db:5432/${DB_NAME:-student_dashboard}?schema=public}
       - JWT_SECRET=${JWT_SECRET:-super_secret_jwt_key_2026_excel_to_dashboard}
       - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://v-cop.cmtc.ac.th}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@gmail.com}

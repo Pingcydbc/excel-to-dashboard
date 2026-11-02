@@ -4,7 +4,28 @@ import fs from "fs";
 import path from "path";
 import * as XLSX from "xlsx";
 
-const prisma = new PrismaClient();
+if (!process.env.DATABASE_URL || !process.env.DATABASE_URL.trim()) {
+  const user = process.env.DB_USER || "postgres";
+  const password = encodeURIComponent(process.env.DB_PASSWORD || "password123");
+  const host =
+    process.env.DB_HOST ||
+    (process.env.NODE_ENV === "production" ? "postgres-db" : "localhost");
+  const port =
+    process.env.DB_PORT ||
+    (host === "localhost" || host === "127.0.0.1"
+      ? process.env.HOST_DB_PORT || "5435"
+      : "5432");
+  const dbName = process.env.DB_NAME || "student_dashboard";
+  process.env.DATABASE_URL = `postgresql://${user}:${password}@${host}:${port}/${dbName}?schema=public`;
+}
+
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL,
+    },
+  },
+});
 
 function cleanStr(val: any): string {
   if (val === null || val === undefined) return "";
