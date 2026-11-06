@@ -52,4 +52,4 @@ networks:
 
 volumes:
   pgdata:
-    name: vcop_cmtc_pgdata
+    name: vcop_cmtc_data_v2
