@@ -14,19 +14,6 @@ export async function GET(req: NextRequest) {
     const levelParam = searchParams.get("level") || "all";
     const majorParam = searchParams.get("major") || "all";
 
-    const cacheKey = `stats_${yearParam}_${levelParam}_${majorParam}`;
-    const cached = statsCache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) {
-      return NextResponse.json(
-        { success: true, data: cached.data, cached: true, responseTimeMs: Date.now() - startTime },
-        {
-          headers: {
-            "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
-          },
-        }
-      );
-    }
-
     // Profile Status filters
     const profileWhere: any = {};
     if (levelParam !== "all") {
@@ -173,7 +160,8 @@ export async function GET(req: NextRequest) {
       majorsData,
       companyGroups,
       availableYears,
-      availableMajors,
+      availableProfileMajors,
+      availableGradMajors,
     ] = await Promise.all([
       profileStatsPromise,
       prisma.graduateTracking.count({ where: gradWhere }),
@@ -222,6 +210,12 @@ export async function GET(req: NextRequest) {
         take: 10,
       }),
       prisma.studentProfileStatus.findMany({
+        select: { major: true },
+        where: { major: { not: null } },
+        distinct: ["major"],
+        take: 50,
+      }),
+      prisma.graduateTracking.findMany({
         select: { major: true },
         where: { major: { not: null } },
         distinct: ["major"],
@@ -291,7 +285,7 @@ export async function GET(req: NextRequest) {
       const sal = g.salaryRange || "";
       const count = g._count._all;
       if (!sal) return;
-      if (sal.includes("ต่ำกว่า") || sal.includes("< 9,000")) {
+      if (sal.includes("ต่ำกว่า") || sal.includes("< 9,000") || sal.includes("1,000 - 9,000") || sal.startsWith("1,000")) {
         salaryMap["ต่ำกว่า 9,000"] += count;
       } else if (sal.includes("9,001") || sal.includes("9001")) {
         salaryMap["9,001 - 15,000"] += count;
@@ -372,15 +366,15 @@ export async function GET(req: NextRequest) {
       // Metadata for Filters
       filters: {
         years: availableYears.map((y) => y.gradYear).filter(Boolean),
-        majors: availableMajors.map((m) => m.major).filter(Boolean) as string[],
+        majors: Array.from(
+          new Set(
+            [...availableProfileMajors, ...availableGradMajors]
+              .map((m) => m.major?.trim())
+              .filter(Boolean)
+          )
+        ) as string[],
       },
     };
-
-    // Store in cache for 30s
-    statsCache.set(cacheKey, {
-      data: responseData,
-      expiresAt: Date.now() + 30000,
-    });
 
     return NextResponse.json(
       {
@@ -391,7 +385,7 @@ export async function GET(req: NextRequest) {
       },
       {
         headers: {
-          "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
+          "Cache-Control": "no-store, max-age=0",
         },
       }
     );

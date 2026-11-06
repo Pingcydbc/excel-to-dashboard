@@ -109,6 +109,111 @@ export function parseProfileStatusExcel(buffer: Buffer | ArrayBuffer): {
     return { records: [], preview: [], totalRows: 0 };
   }
 
+  // Check if this is a Graduate StudentDetail_Report file (where [0]="ชื่อ นามสกุล" and [8]="เลขรหัสนักเรียน")
+  let isGraduateDetailFormat = false;
+  let gradHeaderIdx = 5;
+  for (let i = 0; i < Math.min(rawRows.length, 15); i++) {
+    const row = rawRows[i];
+    if (Array.isArray(row)) {
+      const text = row.join(" ");
+      if (text.includes("เลขรหัสนักเรียน") && text.includes("ชื่อ นามสกุล")) {
+        isGraduateDetailFormat = true;
+        gradHeaderIdx = i;
+        break;
+      }
+    }
+  }
+
+  if (isGraduateDetailFormat) {
+    const cleanDash = (val: any): string => {
+      const s = cleanStr(val);
+      return s === "-" ? "" : s;
+    };
+
+    const records: ParsedProfileStatusRecord[] = [];
+    for (let r = gradHeaderIdx + 1; r < rawRows.length; r++) {
+      const row = rawRows[r];
+      if (!row || row.length === 0) continue;
+
+      const fullName = cleanStr(row[0]);
+      const studentId = cleanStr(row[8]);
+      if (!fullName || !studentId || fullName === "ชื่อ นามสกุล" || fullName.includes("รวม")) continue;
+
+      let prefix = "";
+      let nameBody = fullName;
+      if (nameBody.startsWith("นาย ")) {
+        prefix = "นาย";
+        nameBody = nameBody.substring(4).trim();
+      } else if (nameBody.startsWith("นางสาว ")) {
+        prefix = "นางสาว";
+        nameBody = nameBody.substring(7).trim();
+      } else if (nameBody.startsWith("น.ส. ")) {
+        prefix = "นางสาว";
+        nameBody = nameBody.substring(5).trim();
+      }
+      const parts = nameBody.split(/\s+/);
+      const firstName = parts[0] || fullName;
+      const lastName = parts.slice(1).join(" ") || "";
+
+      const educationLevel = normalizeLevel(cleanStr(row[2]));
+      const faculty = cleanDash(row[4]);
+      const major = cleanDash(row[13]) || faculty;
+      const minor = cleanDash(row[13]) || faculty;
+
+      const citizenId = cleanDash(row[3]);
+      const birthDate = cleanDash(row[9]);
+      const email = cleanDash(row[10]);
+      const phone = cleanDash(row[11]);
+
+      const hasStudy = Boolean(cleanDash(row[16]) || cleanDash(row[17]) || cleanDash(row[18]) || cleanDash(row[19]) || cleanDash(row[20]));
+      const hasWork = Boolean(cleanDash(row[21]) || cleanDash(row[22]) || cleanDash(row[23]) || cleanDash(row[24]));
+      const hasDetailPlace = Boolean(cleanDash(row[17]) || cleanDash(row[21]) || cleanDash(row[22]));
+
+      // Compute profile completeness % based on filled fields in the report
+      let score = 20; // studentId + fullName + major
+      if (citizenId) score += 10;
+      if (birthDate) score += 5;
+      if (phone) score += 10;
+      if (email) score += 10;
+      if (hasStudy || hasWork) {
+        score += 35;
+        if (hasDetailPlace) score += 10;
+      }
+
+      const completeness = Math.min(100, score);
+
+      records.push({
+        studentId,
+        prefix,
+        firstName,
+        lastName,
+        educationLevel,
+        faculty,
+        major,
+        minor,
+        lastProfileUpdate: new Date(),
+        completeness,
+      });
+    }
+
+    const uniqueMap = new Map<string, ParsedProfileStatusRecord>();
+    for (const rec of records) {
+      uniqueMap.set(rec.studentId, rec);
+    }
+    const uniqueRecords = Array.from(uniqueMap.values());
+    const preview = uniqueRecords.slice(0, 10).map((r) => ({
+      "รหัสนักศึกษา": r.studentId,
+      "ชื่อ-นามสกุล": `${r.prefix ? r.prefix + " " : ""}${r.firstName} ${r.lastName}`.trim(),
+      "ระดับการศึกษา": r.educationLevel,
+      "ประเภทวิชา": r.faculty || "-",
+      "สาขาวิชา": r.major || "-",
+      "สาขางาน": r.minor || "-",
+      "ความสมบูรณ์": `${r.completeness}%`,
+    }));
+
+    return { records: uniqueRecords, preview, totalRows: uniqueRecords.length };
+  }
+
   let headerRowIdx = 6;
   for (let i = 0; i < Math.min(rawRows.length, 20); i++) {
     const row = rawRows[i];
@@ -405,6 +510,23 @@ export function parseGraduateTrackingExcel(buffer: Buffer | ArrayBuffer): {
     }
   }
 
+  // Extract default gradYear and gradTerm from report header rows (Row 1 = Year, Row 2 = Term)
+  let defaultGradYear = 2568;
+  let defaultGradTerm = "2";
+  if (rawRows[1] && cleanStr(rawRows[1][0])) {
+    const y = parseInt(cleanStr(rawRows[1][0]), 10);
+    if (!isNaN(y) && y > 2000) defaultGradYear = y > 2400 ? y : y + 543;
+  }
+  if (rawRows[2] && cleanStr(rawRows[2][0])) {
+    const t = cleanStr(rawRows[2][0]);
+    if (/^[123]$/.test(t)) defaultGradTerm = t;
+  }
+
+  const cleanDash = (val: any): string => {
+    const s = cleanStr(val);
+    return s === "-" ? "" : s;
+  };
+
   const records: ParsedGraduateRecord[] = [];
   const startRow = headerRowIdx + 1;
 
@@ -412,18 +534,19 @@ export function parseGraduateTrackingExcel(buffer: Buffer | ArrayBuffer): {
     const row = rawRows[r];
     if (!row || row.length === 0) continue;
 
-    // [0]=fullName, [2]=level, [3]=citizenId, [4]=faculty, [6]=gradYear, [8]=studentId, [13]=major
-    // [16]=furtherLevel, [17]=instituteName, [18]=studyMatch, [21]=company, [22]=jobPosition, [23]=salary, [24]=jobMatch
+    // [0]=fullName, [2]=level, [3]=citizenId, [4]=faculty, [6]=gradYear, [7]=gradTerm, [8]=studentId, [13]=major
+    // [16]=furtherLevel, [17]=instituteName, [18]=studyMatch, [19]=studyFaculty, [20]=studyMajor
+    // [21]=company, [22]=jobPosition, [23]=salary, [24]=jobMatch, [25]=trackingStatus, [26]=gradAcademicYear
     const fullName = cleanStr(row[0]);
     const studentId = cleanStr(row[8]) || `GRAD_${r}`;
-    if (!fullName || fullName === "ชื่อ นามสกุล") continue;
+    if (!fullName || fullName === "ชื่อ นามสกุล" || fullName.includes("รวม")) continue;
 
-    const citizenId = cleanStr(row[3]) || undefined;
+    const citizenId = cleanDash(row[3]) || undefined;
     const educationLevel = normalizeLevel(cleanStr(row[2]));
-    const faculty = cleanStr(row[4]);
-    const major = cleanStr(row[13]);
+    const faculty = cleanDash(row[4]);
+    const major = cleanDash(row[13]) || faculty;
 
-    let gradYear = 2568;
+    let gradYear = defaultGradYear;
     const rawYear = cleanStr(row[6]) || cleanStr(row[26]);
     if (rawYear) {
       const y = parseInt(rawYear, 10);
@@ -432,24 +555,73 @@ export function parseGraduateTrackingExcel(buffer: Buffer | ArrayBuffer): {
       }
     }
 
-    const gradTerm = cleanStr(row[7]) || "2";
-    const furtherStudyLevel = cleanStr(row[16]);
-    const instituteName = cleanStr(row[17]);
-    const studyMajorMatch = normalizeMatch(cleanStr(row[18]));
+    const gradTerm = cleanDash(row[7]) || defaultGradTerm;
 
-    const companyName = cleanStr(row[21]);
-    const jobPosition = cleanStr(row[22]);
-    const salaryRange = cleanStr(row[23]);
-    const jobMajorMatch = normalizeMatch(cleanStr(row[24]));
+    // Study fields: [16]=ระดับที่ศึกษาต่อ, [17]=ชื่อสถานศึกษา, [18]=ตรงสาย/ไม่ตรงสาย, [19]=ประเภทวิชา/คณะ, [20]=สาขาวิชาที่เรียนต่อ
+    const rawFurtherLevel = cleanDash(row[16]);
+    const rawInstitute = cleanDash(row[17]);
+    const rawStudyMatch = cleanDash(row[18]);
+    const rawStudyFaculty = cleanDash(row[19]);
+    const rawStudyMajor = cleanDash(row[20]);
 
-    let trackingStatus = cleanStr(row[25]);
+    const studyMajorMatch = normalizeMatch(rawStudyMatch);
+    const hasStudyInfo = Boolean(rawFurtherLevel || rawInstitute || rawStudyMatch || rawStudyFaculty || rawStudyMajor);
+
+    // Work fields: [21]=ชื่อสถานที่ทำงาน, [22]=ตำแหน่งงาน, [23]=เงินเดือน, [24]=ทำงานตรงสาย
+    const rawCompany = cleanDash(row[21]);
+    const rawPosition = cleanDash(row[22]);
+    const rawSalary = cleanDash(row[23]);
+    const rawJobMatch = cleanDash(row[24]);
+
+    const salaryRange = rawSalary;
+    const jobMajorMatch = normalizeMatch(rawJobMatch);
+    const hasWorkInfo = Boolean(rawCompany || rawPosition || rawSalary || rawJobMatch);
+
+    let trackingStatus = cleanDash(row[25]);
     if (!trackingStatus || trackingStatus === "ตรง" || trackingStatus === "ไม่ตรง") {
-      if (companyName || jobPosition || salaryRange) {
-        trackingStatus = "มีงานทำ";
-      } else if (instituteName || furtherStudyLevel) {
+      if (hasWorkInfo) {
+        if (rawCompany.includes("ค่ายทหาร") || rawPosition.includes("ทหาร")) {
+          trackingStatus = "เกณฑ์ทหาร";
+        } else {
+          trackingStatus = "มีงานทำ";
+        }
+      } else if (hasStudyInfo) {
         trackingStatus = "ศึกษาต่อ";
       } else {
         trackingStatus = "ว่างงาน";
+      }
+    }
+
+    // Populate fallback labels when V-COP export leaves sub-columns blank
+    let furtherStudyLevel = rawFurtherLevel;
+    let instituteName = rawInstitute;
+    if (trackingStatus === "ศึกษาต่อ") {
+      if (!furtherStudyLevel) {
+        if (rawStudyMajor && rawStudyFaculty && rawStudyMajor !== rawStudyFaculty) {
+          furtherStudyLevel = `${rawStudyFaculty} (${rawStudyMajor})`;
+        } else if (rawStudyMajor || rawStudyFaculty) {
+          furtherStudyLevel = `สาขา${rawStudyMajor || rawStudyFaculty}`;
+        } else {
+          furtherStudyLevel = educationLevel === "ปวช." ? "ปวส. / ปริญญาตรี" : "ปริญญาตรี";
+        }
+      }
+      if (!instituteName) {
+        instituteName = rawStudyFaculty
+          ? `ศึกษาต่อด้าน${rawStudyFaculty}`
+          : "ศึกษาต่อ (ไม่ระบุสถานศึกษา)";
+      }
+    }
+
+    let companyName = rawCompany;
+    let jobPosition = rawPosition;
+    if (trackingStatus === "มีงานทำ" || trackingStatus === "เกณฑ์ทหาร") {
+      if (!companyName) {
+        companyName = "ประกอบอาชีพอิสระ / ไม่ระบุสถานประกอบการ";
+      }
+      if (!jobPosition) {
+        jobPosition = companyName.includes("อาชีพอิสระ")
+          ? "ประกอบอาชีพอิสระ"
+          : "พนักงานปฏิบัติการ";
       }
     }
 

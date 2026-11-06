@@ -16,46 +16,76 @@ export async function GET(req: NextRequest) {
     const match = searchParams.get("match") || "";
     const exportAll = searchParams.get("export") === "true";
 
-    const where: any = {};
+    const andConditions: any[] = [];
 
     if (search) {
-      where.OR = [
-        { studentId: { contains: search, mode: "insensitive" } },
-        { fullName: { contains: search, mode: "insensitive" } },
-        { companyName: { contains: search, mode: "insensitive" } },
-        { jobPosition: { contains: search, mode: "insensitive" } },
-        { instituteName: { contains: search, mode: "insensitive" } },
-      ];
+      andConditions.push({
+        OR: [
+          { studentId: { contains: search, mode: "insensitive" } },
+          { fullName: { contains: search, mode: "insensitive" } },
+          { companyName: { contains: search, mode: "insensitive" } },
+          { jobPosition: { contains: search, mode: "insensitive" } },
+          { instituteName: { contains: search, mode: "insensitive" } },
+        ],
+      });
     }
 
     if (year && year !== "all") {
       const parsedYear = parseInt(year, 10);
-      if (!isNaN(parsedYear)) where.gradYear = parsedYear;
+      if (!isNaN(parsedYear)) andConditions.push({ gradYear: parsedYear });
     }
 
     if (level && level !== "all") {
       if (level.includes("ตรี") || level.includes("ปริญญา")) {
-        where.OR = [
-          { educationLevel: { contains: "ป.ตรี" } },
-          { educationLevel: { contains: "ปริญญา" } },
-          { educationLevel: { contains: "ทล.บ." } },
-        ];
+        andConditions.push({
+          OR: [
+            { educationLevel: { contains: "ป.ตรี" } },
+            { educationLevel: { contains: "ปริญญา" } },
+            { educationLevel: { contains: "ทล.บ." } },
+          ],
+        });
       } else {
-        where.educationLevel = { contains: level };
+        andConditions.push({ educationLevel: { contains: level } });
       }
     }
 
     if (major && major !== "all") {
-      where.major = { contains: major };
+      andConditions.push({ major: { contains: major } });
     }
 
     if (status && status !== "all") {
-      where.trackingStatus = { contains: status };
+      andConditions.push({ trackingStatus: { contains: status } });
     }
 
     if (match && match !== "all") {
-      where.jobMajorMatch = { contains: match };
+      if (match === "ไม่ตรง" || match === "ไม่ตรงสาย") {
+        andConditions.push({
+          OR: [
+            { jobMajorMatch: { contains: "ไม่ตรง" } },
+            { studyMajorMatch: { contains: "ไม่ตรง" } },
+          ],
+        });
+      } else if (match === "ตรง" || match === "ตรงสาย") {
+        andConditions.push({
+          OR: [
+            {
+              AND: [
+                { jobMajorMatch: { contains: "ตรง" } },
+                { NOT: { jobMajorMatch: { contains: "ไม่ตรง" } } },
+              ],
+            },
+            {
+              AND: [
+                { studyMajorMatch: { contains: "ตรง" } },
+                { NOT: { studyMajorMatch: { contains: "ไม่ตรง" } } },
+              ],
+            },
+          ],
+        });
+      }
     }
+
+    const where: any = andConditions.length > 0 ? { AND: andConditions } : {};
 
     const [total, graduates] = await Promise.all([
       prisma.graduateTracking.count({ where }),

@@ -82,28 +82,20 @@ export async function DELETE(req: NextRequest) {
     let deletedRecords = 0;
 
     if (deleteAssociatedData) {
-      if (log.fileType === "profile_status") {
-        // Delete records linked to this upload log
-        const res = await prisma.studentProfileStatus.deleteMany({
-          where: { uploadLogId: logId },
-        });
-        deletedRecords = res.count;
+      const [profileDel, gradDel] = await Promise.all([
+        prisma.studentProfileStatus.deleteMany({ where: { uploadLogId: logId } }),
+        prisma.graduateTracking.deleteMany({ where: { uploadLogId: logId } }),
+      ]);
+      deletedRecords = Math.max(profileDel.count, gradDel.count);
 
-        // If no records had uploadLogId (e.g. from initial seed), and there is only 1 log
-        if (deletedRecords === 0) {
+      if (deletedRecords === 0) {
+        if (log.fileType === "profile_status") {
           const totalLogs = await prisma.uploadLog.count({ where: { fileType: "profile_status" } });
           if (totalLogs <= 1) {
             const allRes = await prisma.studentProfileStatus.deleteMany({});
             deletedRecords = allRes.count;
           }
-        }
-      } else if (log.fileType === "graduate_tracking") {
-        const res = await prisma.graduateTracking.deleteMany({
-          where: { uploadLogId: logId },
-        });
-        deletedRecords = res.count;
-
-        if (deletedRecords === 0) {
+        } else if (log.fileType === "graduate_tracking") {
           const totalLogs = await prisma.uploadLog.count({ where: { fileType: "graduate_tracking" } });
           if (totalLogs <= 1) {
             const allRes = await prisma.graduateTracking.deleteMany({});

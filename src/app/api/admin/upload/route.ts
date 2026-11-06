@@ -71,11 +71,15 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // Bulk insert in chunks of 2000 for ultra-fast performance on Cloud / Serverless
+      // Replace existing records for these studentIds so re-uploads update cleanly
       let savedCount = 0;
       const chunkSize = 2000;
       for (let i = 0; i < records.length; i += chunkSize) {
         const chunk = records.slice(i, i + chunkSize);
+        const ids = chunk.map((item) => item.studentId);
+        await prisma.studentProfileStatus.deleteMany({
+          where: { studentId: { in: ids } },
+        });
         const res = await prisma.studentProfileStatus.createMany({
           data: chunk.map((item) => ({
             ...item,
@@ -84,6 +88,29 @@ export async function POST(req: NextRequest) {
           skipDuplicates: true,
         });
         savedCount += res.count;
+      }
+
+      // If this file is a StudentDetail_Report that also contains graduate tracking data, sync graduateTracking too
+      try {
+        const { records: gradRecords } = parseGraduateTrackingExcel(buffer);
+        if (gradRecords.length > 0 && gradRecords[0].studentId && !gradRecords[0].studentId.startsWith("GRAD_")) {
+          for (let i = 0; i < gradRecords.length; i += chunkSize) {
+            const gChunk = gradRecords.slice(i, i + chunkSize);
+            const ids = gChunk.map((item) => item.studentId);
+            await prisma.graduateTracking.deleteMany({
+              where: { studentId: { in: ids } },
+            });
+            await prisma.graduateTracking.createMany({
+              data: gChunk.map((item) => ({
+                ...item,
+                uploadLogId: uploadLog.id,
+              })),
+              skipDuplicates: true,
+            });
+          }
+        }
+      } catch {
+        // Ignore if file is purely a profile status report
       }
 
       const durationMs = Date.now() - startTime;
@@ -141,6 +168,10 @@ export async function POST(req: NextRequest) {
       const chunkSize = 2000;
       for (let i = 0; i < records.length; i += chunkSize) {
         const chunk = records.slice(i, i + chunkSize);
+        const ids = chunk.map((item) => item.studentId);
+        await prisma.graduateTracking.deleteMany({
+          where: { studentId: { in: ids } },
+        });
         const res = await prisma.graduateTracking.createMany({
           data: chunk.map((item) => ({
             ...item,
@@ -149,6 +180,30 @@ export async function POST(req: NextRequest) {
           skipDuplicates: true,
         });
         savedCount += res.count;
+      }
+
+      // If this file is an individual StudentDetail_Report, automatically sync StudentProfileStatus too
+      // so uploading a single file updates both categories at once
+      try {
+        const { records: profileRecords } = parseProfileStatusExcel(buffer);
+        if (profileRecords.length > 0) {
+          for (let i = 0; i < profileRecords.length; i += chunkSize) {
+            const pChunk = profileRecords.slice(i, i + chunkSize);
+            const ids = pChunk.map((item) => item.studentId);
+            await prisma.studentProfileStatus.deleteMany({
+              where: { studentId: { in: ids } },
+            });
+            await prisma.studentProfileStatus.createMany({
+              data: pChunk.map((item) => ({
+                ...item,
+                uploadLogId: uploadLog.id,
+              })),
+              skipDuplicates: true,
+            });
+          }
+        }
+      } catch {
+        // Ignore if file is a summary report without individual student profiles
       }
 
       const durationMs = Date.now() - startTime;
