@@ -14,12 +14,6 @@ services:
       - "${HOST_DB_PORT:-5435}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-student_dashboard}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
     networks:
       - vcop-net
 
@@ -48,8 +42,7 @@ services:
       - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@gmail.com}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admincmtcvcop123}
     depends_on:
-      postgres-db:
-        condition: service_healthy
+      - postgres-db
     networks:
       - vcop-net
 

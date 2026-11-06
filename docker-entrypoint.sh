@@ -18,6 +18,9 @@ fi
 
 # Push Prisma Schema to database if DATABASE_URL is available
 if [ -n "$DATABASE_URL" ]; then
+  echo "⏳ Waiting a few seconds for PostgreSQL connection..."
+  sleep 3
+
   echo "📦 Syncing Prisma Database Schema..."
   npx prisma db push --accept-data-loss || true
   
