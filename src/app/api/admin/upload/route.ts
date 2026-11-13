@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseProfileStatusExcel, parseGraduateTrackingExcel } from "@/lib/excel-parser";
+import { getCurrentAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,20 @@ function formatBytes(bytes: number): string {
 export async function POST(req: NextRequest) {
   const startTime = Date.now();
   try {
+    const admin = await getCurrentAdmin();
+    if (!admin) {
+      return NextResponse.json(
+        { success: false, error: "กรุณาเข้าสู่ระบบก่อนอัปโหลดไฟล์" },
+        { status: 401 }
+      );
+    }
+    if (admin.role?.toUpperCase() !== "ADMIN") {
+      return NextResponse.json(
+        { success: false, error: "บัญชีระดับ Report ไม่สามารถอัปโหลดไฟล์ได้ ทำได้เฉพาะ Export รายงานเท่านั้น" },
+        { status: 403 }
+      );
+    }
+
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     const type = formData.get("type") as string; // 'profile_status' | 'graduate_tracking'
@@ -90,29 +105,6 @@ export async function POST(req: NextRequest) {
         savedCount += res.count;
       }
 
-      // If this file is a StudentDetail_Report that also contains graduate tracking data, sync graduateTracking too
-      try {
-        const { records: gradRecords } = parseGraduateTrackingExcel(buffer);
-        if (gradRecords.length > 0 && gradRecords[0].studentId && !gradRecords[0].studentId.startsWith("GRAD_")) {
-          for (let i = 0; i < gradRecords.length; i += chunkSize) {
-            const gChunk = gradRecords.slice(i, i + chunkSize);
-            const ids = gChunk.map((item) => item.studentId);
-            await prisma.graduateTracking.deleteMany({
-              where: { studentId: { in: ids } },
-            });
-            await prisma.graduateTracking.createMany({
-              data: gChunk.map((item) => ({
-                ...item,
-                uploadLogId: uploadLog.id,
-              })),
-              skipDuplicates: true,
-            });
-          }
-        }
-      } catch {
-        // Ignore if file is purely a profile status report
-      }
-
       const durationMs = Date.now() - startTime;
       await prisma.uploadLog.update({
         where: { id: uploadLog.id },
@@ -180,30 +172,6 @@ export async function POST(req: NextRequest) {
           skipDuplicates: true,
         });
         savedCount += res.count;
-      }
-
-      // If this file is an individual StudentDetail_Report, automatically sync StudentProfileStatus too
-      // so uploading a single file updates both categories at once
-      try {
-        const { records: profileRecords } = parseProfileStatusExcel(buffer);
-        if (profileRecords.length > 0) {
-          for (let i = 0; i < profileRecords.length; i += chunkSize) {
-            const pChunk = profileRecords.slice(i, i + chunkSize);
-            const ids = pChunk.map((item) => item.studentId);
-            await prisma.studentProfileStatus.deleteMany({
-              where: { studentId: { in: ids } },
-            });
-            await prisma.studentProfileStatus.createMany({
-              data: pChunk.map((item) => ({
-                ...item,
-                uploadLogId: uploadLog.id,
-              })),
-              skipDuplicates: true,
-            });
-          }
-        }
-      } catch {
-        // Ignore if file is a summary report without individual student profiles
       }
 
       const durationMs = Date.now() - startTime;

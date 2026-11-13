@@ -1,11 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Briefcase, GraduationCap, TrendingUp, DollarSign, ArrowLeft } from "lucide-react";
+import { Briefcase, GraduationCap, TrendingUp, AlertCircle, CheckCircle2, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import FilterBar from "@/components/FilterBar";
 import StatCard from "@/components/StatCard";
-import GraduatesTable from "@/components/tables/GraduatesTable";
 import EmploymentStatusPieChart from "@/components/charts/EmploymentStatusPieChart";
 import MajorJobMatchBarChart from "@/components/charts/MajorJobMatchBarChart";
 import SalaryRangeBarChart from "@/components/charts/SalaryRangeBarChart";
@@ -14,20 +13,6 @@ export default function EmploymentPage() {
   const [selectedYear, setSelectedYear] = useState<string>("all");
   const [selectedLevel, setSelectedLevel] = useState<string>("all");
   const [selectedMajor, setSelectedMajor] = useState<string>("all");
-  const [selectedStatus, setSelectedStatus] = useState<string>("all");
-  const [selectedMatch, setSelectedMatch] = useState<string>("all");
-  const [searchTerm, setSearchTerm] = useState<string>("all");
-  const [page, setPage] = useState<number>(1);
-
-  const [loading, setLoading] = useState<boolean>(true);
-  const [graduatesData, setGraduatesData] = useState<any[]>([]);
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 15,
-    total: 0,
-    totalPages: 1,
-  });
-
   const [stats, setStats] = useState<any>(null);
 
   const fetchStats = async () => {
@@ -47,52 +32,18 @@ export default function EmploymentPage() {
     }
   };
 
-  const fetchGraduates = async () => {
-    try {
-      setLoading(true);
-      const params = new URLSearchParams();
-      params.set("page", page.toString());
-      params.set("limit", "15");
-      if (searchTerm && searchTerm !== "all") params.set("search", searchTerm);
-      if (selectedYear !== "all") params.set("year", selectedYear);
-      if (selectedLevel !== "all") params.set("level", selectedLevel);
-      if (selectedMajor !== "all") params.set("major", selectedMajor);
-      if (selectedStatus !== "all") params.set("status", selectedStatus);
-      if (selectedMatch !== "all") params.set("match", selectedMatch);
-
-      const res = await fetch(`/api/employment?${params.toString()}`);
-      const json = await res.json();
-      if (json.success) {
-        setGraduatesData(json.data || []);
-        setPagination(json.pagination || { page: 1, limit: 15, total: 0, totalPages: 1 });
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
     fetchStats();
   }, [selectedYear, selectedLevel, selectedMajor]);
-
-  useEffect(() => {
-    fetchGraduates();
-  }, [page, searchTerm, selectedYear, selectedLevel, selectedMajor, selectedStatus, selectedMatch]);
 
   const handleResetFilters = () => {
     setSelectedYear("all");
     setSelectedLevel("all");
     setSelectedMajor("all");
-    setSelectedStatus("all");
-    setSelectedMatch("all");
-    setSearchTerm("");
-    setPage(1);
   };
 
   const employmentStats = stats?.employmentStats || {};
-  const filterMeta = stats?.filters || { years: [], majors: [] };
+  const filterMeta = stats?.filters || { years: [], gradMajors: [] };
 
   return (
     <div className="space-y-6" id="employment-content">
@@ -118,29 +69,20 @@ export default function EmploymentPage() {
       {/* Filter Bar */}
       <FilterBar
         selectedYear={selectedYear}
-        onYearChange={(y) => {
-          setSelectedYear(y);
-          setPage(1);
-        }}
+        onYearChange={setSelectedYear}
         selectedLevel={selectedLevel}
-        onLevelChange={(lvl) => {
-          setSelectedLevel(lvl);
-          setPage(1);
-        }}
+        onLevelChange={setSelectedLevel}
         selectedMajor={selectedMajor}
-        onMajorChange={(m) => {
-          setSelectedMajor(m);
-          setPage(1);
-        }}
+        onMajorChange={setSelectedMajor}
         years={filterMeta.years}
-        majors={filterMeta.majors}
+        majors={filterMeta.gradMajors || []}
         onReset={handleResetFilters}
       />
 
-      {/* KPI Cards */}
+      {/* 4 KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          title="ผู้สำเร็จการศึกษาทั้งหมด"
+          title="1. ผู้สำเร็จการศึกษาทั้งหมด"
           value={`${employmentStats.totalGraduates?.toLocaleString() || 0} คน`}
           subtitle="ตามเงื่อนไขตัวกรอง"
           icon={GraduationCap}
@@ -148,27 +90,38 @@ export default function EmploymentPage() {
         />
 
         <StatCard
-          title="มีงานทำแล้ว"
+          title="2. มีงานทำแล้ว"
           value={`${employmentStats.employmentRate || 0}%`}
-          subtitle={`${employmentStats.employedCount?.toLocaleString() || 0} คน`}
+          subtitle={`จำนวน ${employmentStats.employedCount?.toLocaleString() || 0} คน`}
           icon={Briefcase}
           color="emerald"
+          topContent={
+            <div className="inline-flex flex-wrap items-center gap-1.5 text-[11px] bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200/80">
+              <span className="flex items-center gap-1 font-semibold text-emerald-800">
+                <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                ทำงานตรงสาขาวิชา:
+              </span>
+              <span className="font-bold text-emerald-700">
+                {employmentStats.matchRate || 0}% ({employmentStats.jobMatchedCount?.toLocaleString() || 0} คน)
+              </span>
+            </div>
+          }
         />
 
         <StatCard
-          title="ศึกษาต่อระดับสูงขึ้น"
+          title="3. ศึกษาต่อระดับสูงขึ้น"
           value={`${employmentStats.studyRate || 0}%`}
-          subtitle={`${employmentStats.studyCount?.toLocaleString() || 0} คน`}
+          subtitle={`จำนวน ${employmentStats.studyCount?.toLocaleString() || 0} คน`}
           icon={TrendingUp}
           color="blue"
         />
 
         <StatCard
-          title="ทำงานตรงสาขาวิชา"
-          value={`${employmentStats.matchRate || 0}%`}
-          subtitle={`${employmentStats.jobMatchedCount?.toLocaleString() || 0} คน (ตรงสาย)`}
-          icon={DollarSign}
-          color="purple"
+          title="4. การว่างงาน"
+          value={`${employmentStats.unemploymentRate || 0}%`}
+          subtitle={`จำนวน ${employmentStats.unemployedCount?.toLocaleString() || 0} คน`}
+          icon={AlertCircle}
+          color="rose"
         />
       </div>
 
@@ -205,43 +158,11 @@ export default function EmploymentPage() {
               <span className="font-bold text-emerald-600">{employmentStats.matchRate || 0}%</span>
             </div>
             <div className="p-3 bg-slate-50 rounded-xl flex items-center justify-between text-xs">
-              <span className="text-slate-600">อัตราว่างงาน</span>
-              <span className="font-bold text-rose-600">
-                {employmentStats.totalGraduates > 0
-                  ? ((employmentStats.unemployedCount / employmentStats.totalGraduates) * 100).toFixed(1)
-                  : 0}%
-              </span>
+              <span className="text-slate-600">อัตราการว่างงาน</span>
+              <span className="font-bold text-rose-600">{employmentStats.unemploymentRate || 0}%</span>
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Table */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-bold text-slate-800">รายละเอียดรายบุคคล</h2>
-        </div>
-        <GraduatesTable
-          graduates={graduatesData}
-          pagination={pagination}
-          searchTerm={searchTerm === "all" ? "" : searchTerm}
-          onSearchChange={(val) => {
-            setSearchTerm(val);
-            setPage(1);
-          }}
-          onPageChange={setPage}
-          selectedStatus={selectedStatus}
-          onStatusChange={(st) => {
-            setSelectedStatus(st);
-            setPage(1);
-          }}
-          selectedMatch={selectedMatch}
-          onMatchChange={(m) => {
-            setSelectedMatch(m);
-            setPage(1);
-          }}
-          loading={loading}
-        />
       </div>
     </div>
   );

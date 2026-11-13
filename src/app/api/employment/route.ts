@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { filterByDefaultCohort, matchesMajorFilter } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const page = parseInt(searchParams.get("page") || "1", 10);
     const limit = parseInt(searchParams.get("limit") || "15", 10);
-    const search = searchParams.get("search") || "";
+    const search = (searchParams.get("search") || "").trim().toLowerCase();
     const year = searchParams.get("year") || "";
     const level = searchParams.get("level") || "";
     const major = searchParams.get("major") || "";
@@ -16,89 +17,73 @@ export async function GET(req: NextRequest) {
     const match = searchParams.get("match") || "";
     const exportAll = searchParams.get("export") === "true";
 
-    const andConditions: any[] = [];
+    const allGraduates = await prisma.graduateTracking.findMany({
+      orderBy: [{ gradYear: "desc" }, { studentId: "asc" }],
+    });
 
-    if (search) {
-      andConditions.push({
-        OR: [
-          { studentId: { contains: search, mode: "insensitive" } },
-          { fullName: { contains: search, mode: "insensitive" } },
-          { companyName: { contains: search, mode: "insensitive" } },
-          { jobPosition: { contains: search, mode: "insensitive" } },
-          { instituteName: { contains: search, mode: "insensitive" } },
-        ],
-      });
-    }
+    // 1. Apply Default Cohort Filter from Excel dataset (ปวช. ย้อนหลัง 2 ปี / ปวส. 1 ปี / ป.ตรี 1 ปี)
+    const { filtered: cohortGraduates, baseYearPrefix } = filterByDefaultCohort(allGraduates);
 
-    if (year && year !== "all") {
-      const parsedYear = parseInt(year, 10);
-      if (!isNaN(parsedYear)) andConditions.push({ gradYear: parsedYear });
-    }
+    const parsedYear = year && year !== "all" ? parseInt(year, 10) : NaN;
 
-    if (level && level !== "all") {
-      if (level.includes("ตรี") || level.includes("ปริญญา")) {
-        andConditions.push({
-          OR: [
-            { educationLevel: { contains: "ป.ตรี" } },
-            { educationLevel: { contains: "ปริญญา" } },
-            { educationLevel: { contains: "ทล.บ." } },
-          ],
-        });
-      } else {
-        andConditions.push({ educationLevel: { contains: level } });
+    // 2. Apply UI / Report filters
+    const filtered = cohortGraduates.filter((g) => {
+      if (search) {
+        const matchSearch =
+          g.studentId.toLowerCase().includes(search) ||
+          g.fullName.toLowerCase().includes(search) ||
+          (g.companyName || "").toLowerCase().includes(search) ||
+          (g.jobPosition || "").toLowerCase().includes(search) ||
+          (g.instituteName || "").toLowerCase().includes(search);
+        if (!matchSearch) return false;
       }
-    }
 
-    if (major && major !== "all") {
-      andConditions.push({ major: { contains: major } });
-    }
-
-    if (status && status !== "all") {
-      andConditions.push({ trackingStatus: { contains: status } });
-    }
-
-    if (match && match !== "all") {
-      if (match === "ไม่ตรง" || match === "ไม่ตรงสาย") {
-        andConditions.push({
-          OR: [
-            { jobMajorMatch: { contains: "ไม่ตรง" } },
-            { studyMajorMatch: { contains: "ไม่ตรง" } },
-          ],
-        });
-      } else if (match === "ตรง" || match === "ตรงสาย") {
-        andConditions.push({
-          OR: [
-            {
-              AND: [
-                { jobMajorMatch: { contains: "ตรง" } },
-                { NOT: { jobMajorMatch: { contains: "ไม่ตรง" } } },
-              ],
-            },
-            {
-              AND: [
-                { studyMajorMatch: { contains: "ตรง" } },
-                { NOT: { studyMajorMatch: { contains: "ไม่ตรง" } } },
-              ],
-            },
-          ],
-        });
+      if (!isNaN(parsedYear) && g.gradYear !== parsedYear) {
+        return false;
       }
-    }
 
-    const where: any = andConditions.length > 0 ? { AND: andConditions } : {};
+      if (level && level !== "all") {
+        const lv = g.educationLevel || "";
+        if (level.includes("ตรี") || level.includes("ปริญญา")) {
+          if (!lv.includes("ป.ตรี") && !lv.includes("ปริญญา") && !lv.includes("ทล.บ.")) {
+            return false;
+          }
+        } else if (!lv.includes(level)) {
+          return false;
+        }
+      }
 
-    const [total, graduates] = await Promise.all([
-      prisma.graduateTracking.count({ where }),
-      prisma.graduateTracking.findMany({
-        where,
-        orderBy: [{ gradYear: "desc" }, { studentId: "asc" }],
-        skip: exportAll ? 0 : (page - 1) * limit,
-        take: exportAll ? 5000 : limit,
-      }),
-    ]);
+      if (!matchesMajorFilter(g.major, major)) {
+        return false;
+      }
+
+      if (status && status !== "all") {
+        if (!(g.trackingStatus || "").includes(status)) return false;
+      }
+
+      if (match && match !== "all") {
+        const jm = g.jobMajorMatch || "";
+        const sm = g.studyMajorMatch || "";
+        if (match === "ไม่ตรง" || match === "ไม่ตรงสาย") {
+          if (!jm.includes("ไม่ตรง") && !sm.includes("ไม่ตรง")) return false;
+        } else if (match === "ตรง" || match === "ตรงสาย") {
+          const jDirect = jm.includes("ตรง") && !jm.includes("ไม่ตรง");
+          const sDirect = sm.includes("ตรง") && !sm.includes("ไม่ตรง");
+          if (!jDirect && !sDirect) return false;
+        }
+      }
+
+      return true;
+    });
+
+    const total = filtered.length;
+    const graduates = exportAll
+      ? filtered
+      : filtered.slice((page - 1) * limit, (page - 1) * limit + limit);
 
     return NextResponse.json({
       success: true,
+      baseYear: baseYearPrefix ? baseYearPrefix + 2500 : null,
       data: graduates,
       pagination: {
         page,

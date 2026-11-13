@@ -5,23 +5,10 @@ import { Building2, Users, Briefcase, Award, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import FilterBar from "@/components/FilterBar";
 import StatCard from "@/components/StatCard";
-import CompaniesTable from "@/components/tables/CompaniesTable";
 import TopCompaniesBarChart from "@/components/charts/TopCompaniesBarChart";
 
 export default function CompaniesPage() {
   const [selectedMajor, setSelectedMajor] = useState<string>("all");
-  const [searchTerm, setSearchTerm] = useState<string>("");
-  const [page, setPage] = useState<number>(1);
-
-  const [loading, setLoading] = useState<boolean>(true);
-  const [companiesData, setCompaniesData] = useState<any[]>([]);
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 15,
-    total: 0,
-    totalPages: 1,
-  });
-
   const [stats, setStats] = useState<any>(null);
 
   const fetchStats = async () => {
@@ -39,44 +26,16 @@ export default function CompaniesPage() {
     }
   };
 
-  const fetchCompanies = async () => {
-    try {
-      setLoading(true);
-      const params = new URLSearchParams();
-      params.set("page", page.toString());
-      params.set("limit", "15");
-      if (searchTerm) params.set("search", searchTerm);
-      if (selectedMajor !== "all") params.set("major", selectedMajor);
-
-      const res = await fetch(`/api/companies?${params.toString()}`);
-      const json = await res.json();
-      if (json.success) {
-        setCompaniesData(json.data || []);
-        setPagination(json.pagination || { page: 1, limit: 15, total: 0, totalPages: 1 });
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
     fetchStats();
   }, [selectedMajor]);
 
-  useEffect(() => {
-    fetchCompanies();
-  }, [page, searchTerm, selectedMajor]);
-
   const handleResetFilters = () => {
     setSelectedMajor("all");
-    setSearchTerm("");
-    setPage(1);
   };
 
   const companyStats = stats?.companyStats || {};
-  const filterMeta = stats?.filters || { majors: [] };
+  const filterMeta = stats?.filters || { gradMajors: [] };
 
   return (
     <div className="space-y-6" id="companies-content">
@@ -106,11 +65,8 @@ export default function CompaniesPage() {
         selectedLevel="all"
         onLevelChange={() => {}}
         selectedMajor={selectedMajor}
-        onMajorChange={(m) => {
-          setSelectedMajor(m);
-          setPage(1);
-        }}
-        majors={filterMeta.majors}
+        onMajorChange={setSelectedMajor}
+        majors={filterMeta.gradMajors || []}
         years={[]}
         showYearFilter={false}
         onReset={handleResetFilters}
@@ -121,7 +77,11 @@ export default function CompaniesPage() {
         <StatCard
           title="สถานประกอบการทั้งหมด"
           value={`${companyStats.totalUniqueCompanies?.toLocaleString() || 0} แห่ง`}
-          subtitle="ที่มีการจ้างงานผู้สำเร็จการศึกษา"
+          subtitle={
+            companyStats.unspecifiedCompanyCount > 0
+              ? `ไม่รวมอาชีพอิสระ/ไม่ระบุ (${companyStats.unspecifiedCompanyCount.toLocaleString()} คน)`
+              : "ที่มีการจ้างงานผู้สำเร็จการศึกษา"
+          }
           icon={Building2}
           color="indigo"
         />
@@ -170,24 +130,6 @@ export default function CompaniesPage() {
             เพิ่มการฝึกงานภาคปฏิบัติและพัฒนาทักษะเฉพาะทางตามความต้องการของสถานประกอบการ Top 10
           </div>
         </div>
-      </div>
-
-      {/* Companies Table */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-bold text-slate-800">รายชื่อสถานประกอบการทั้งหมดและการจ้างงาน</h2>
-        </div>
-        <CompaniesTable
-          companies={companiesData}
-          pagination={pagination}
-          searchTerm={searchTerm}
-          onSearchChange={(val) => {
-            setSearchTerm(val);
-            setPage(1);
-          }}
-          onPageChange={setPage}
-          loading={loading}
-        />
       </div>
     </div>
   );

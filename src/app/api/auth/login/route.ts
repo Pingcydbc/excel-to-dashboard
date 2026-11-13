@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { comparePassword, hashPassword, signToken } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json();
@@ -16,15 +18,16 @@ export async function POST(req: NextRequest) {
     const cleanEmail = email.trim().toLowerCase();
     const envAdminEmail = (process.env.ADMIN_EMAIL || "admin@gmail.com").trim().toLowerCase();
     const envAdminPassword = process.env.ADMIN_PASSWORD || "admincmtcvcop123";
+    const envReportEmail = (process.env.REPORT_EMAIL || "report@gmail.com").trim().toLowerCase();
+    const envReportPassword = process.env.REPORT_PASSWORD || "reportcmtcvcop123";
 
     let admin = await prisma.adminUser.findUnique({
       where: { email: cleanEmail },
     });
 
-    // Auto-create initial admin on fresh database if matching env credentials
+    // Auto-create or sync initial accounts if matching env credentials
     if (!admin) {
-      const adminCount = await prisma.adminUser.count();
-      if (adminCount === 0 && cleanEmail === envAdminEmail && password === envAdminPassword) {
+      if (cleanEmail === envAdminEmail && password === envAdminPassword) {
         const hashedPassword = hashPassword(envAdminPassword);
         admin = await prisma.adminUser.create({
           data: {
@@ -32,6 +35,16 @@ export async function POST(req: NextRequest) {
             password: hashedPassword,
             name: "ผู้ดูแลระบบ (Admin)",
             role: "ADMIN",
+          },
+        });
+      } else if (cleanEmail === envReportEmail && password === envReportPassword) {
+        const hashedPassword = hashPassword(envReportPassword);
+        admin = await prisma.adminUser.create({
+          data: {
+            email: envReportEmail,
+            password: hashedPassword,
+            name: "ผู้ดูและพิมพ์รายงาน (Report)",
+            role: "REPORT",
           },
         });
       }
@@ -69,9 +82,13 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    const forwardedProto = req.headers.get("x-forwarded-proto");
+    const isHttps =
+      forwardedProto === "https" || req.nextUrl.protocol === "https:";
+
     response.cookies.set("admin_token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: isHttps,
       sameSite: "lax",
       maxAge: 60 * 60 * 24 * 7, // 7 days
       path: "/",

@@ -7,11 +7,11 @@ services:
     container_name: vcop_cmtc_db
     restart: always
     environment:
-      POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-password123}
-      POSTGRES_DB: ${DB_NAME:-student_dashboard}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     ports:
-      - "${HOST_DB_PORT:-5435}:5432"
+      - "${HOST_DB_PORT}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
@@ -31,16 +31,18 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - DB_USER=${DB_USER:-postgres}
-      - DB_PASSWORD=${DB_PASSWORD:-password123}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
       - DB_HOST=postgres-db
       - DB_PORT=5432
-      - DB_NAME=${DB_NAME:-student_dashboard}
-      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password123}@postgres-db:5432/${DB_NAME:-student_dashboard}?schema=public
-      - JWT_SECRET=${JWT_SECRET:-super_secret_jwt_key_2026_excel_to_dashboard}
-      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://v-cop.cmtc.ac.th}
-      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@gmail.com}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admincmtcvcop123}
+      - DB_NAME=${DB_NAME}
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@postgres-db:5432/${DB_NAME}?schema=public
+      - JWT_SECRET=${JWT_SECRET}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - REPORT_EMAIL=${REPORT_EMAIL}
+      - REPORT_PASSWORD=${REPORT_PASSWORD}
     depends_on:
       - postgres-db
     networks:

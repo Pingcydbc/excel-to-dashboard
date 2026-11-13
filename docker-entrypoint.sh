@@ -22,7 +22,7 @@ if [ -n "$DATABASE_URL" ]; then
   sleep 3
 
   echo "📦 Syncing Prisma Database Schema..."
-  npx prisma db push --accept-data-loss || true
+  node ./node_modules/prisma/build/index.js db push --accept-data-loss --skip-generate || true
   
   echo "👤 Ensuring Admin Account from Environment..."
   node -e "
@@ -38,7 +38,7 @@ if [ -n "$DATABASE_URL" ]; then
         const hash = bcrypt.hashSync(password, 10);
         const admin = await prisma.adminUser.upsert({
           where: { email },
-          update: { password: hash },
+          update: { password: hash, role: 'ADMIN' },
           create: {
             email,
             password: hash,
@@ -47,6 +47,21 @@ if [ -n "$DATABASE_URL" ]; then
           }
         });
         console.log('✅ Admin Account Ready:', admin.email);
+
+        const reportEmail = (process.env.REPORT_EMAIL || 'report@gmail.com').trim().toLowerCase();
+        const reportPassword = process.env.REPORT_PASSWORD || 'reportcmtcvcop123';
+        const reportHash = bcrypt.hashSync(reportPassword, 10);
+        const reportUser = await prisma.adminUser.upsert({
+          where: { email: reportEmail },
+          update: { password: reportHash, role: 'REPORT' },
+          create: {
+            email: reportEmail,
+            password: reportHash,
+            name: 'ผู้ดูและพิมพ์รายงาน (Report)',
+            role: 'REPORT'
+          }
+        });
+        console.log('✅ Report Account Ready:', reportUser.email);
       } catch (e) {
         console.warn('Admin init warning:', e.message);
       } finally {

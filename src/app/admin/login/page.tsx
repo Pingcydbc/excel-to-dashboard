@@ -23,7 +23,11 @@ export default function AdminLoginPage() {
 
       const data = await res.json();
       if (data.success) {
-        window.location.href = "/admin/upload";
+        if (data.user?.role === "REPORT") {
+          window.location.href = "/admin/reports";
+        } else {
+          window.location.href = "/admin/upload";
+        }
       } else {
         setError(data.error || "อีเมลหรือรหัสผ่านไม่ถูกต้อง");
       }

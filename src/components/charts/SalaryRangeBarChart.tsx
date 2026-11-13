@@ -7,7 +7,7 @@ interface SalaryRangeBarChartProps {
   data: { range: string; count: number }[];
 }
 
-const colors = ["#94a3b8", "#38bdf8", "#6366f1", "#10b981"];
+const colors = ["#94a3b8", "#38bdf8", "#6366f1", "#10b981", "#8b5cf6"];
 
 export default function SalaryRangeBarChart({ data = [] }: SalaryRangeBarChartProps) {
   return (

@@ -79,18 +79,28 @@ export function parseDate(val: any): Date | null {
   }
 
   const str = String(val).trim();
-  const parsed = new Date(str);
-  if (!isNaN(parsed.getTime())) return parsed;
 
-  const thaiDateMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  // Check DD/MM/YYYY (including optional time) before native Date() so 12/11/2026 isn't misread as Nov 12 vs Dec 11
+  const thaiDateMatch = str.match(
+    /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?/i
+  );
   if (thaiDateMatch) {
     const day = parseInt(thaiDateMatch[1], 10);
     const month = parseInt(thaiDateMatch[2], 10) - 1;
     let year = parseInt(thaiDateMatch[3], 10);
     if (year > 2400) year -= 543;
-    const d = new Date(year, month, day);
+    let hour = thaiDateMatch[4] ? parseInt(thaiDateMatch[4], 10) : 0;
+    const minute = thaiDateMatch[5] ? parseInt(thaiDateMatch[5], 10) : 0;
+    const second = thaiDateMatch[6] ? parseInt(thaiDateMatch[6], 10) : 0;
+    const ampm = thaiDateMatch[7]?.toUpperCase();
+    if (ampm === "PM" && hour < 12) hour += 12;
+    if (ampm === "AM" && hour === 12) hour = 0;
+    const d = new Date(year, month, day, hour, minute, second);
     if (!isNaN(d.getTime())) return d;
   }
+
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) return parsed;
 
   return null;
 }
@@ -109,109 +119,21 @@ export function parseProfileStatusExcel(buffer: Buffer | ArrayBuffer): {
     return { records: [], preview: [], totalRows: 0 };
   }
 
-  // Check if this is a Graduate StudentDetail_Report file (where [0]="ชื่อ นามสกุล" and [8]="เลขรหัสนักเรียน")
-  let isGraduateDetailFormat = false;
-  let gradHeaderIdx = 5;
+  // Prevent accidentally uploading a Graduate Tracking file into the Student Profile Status category
   for (let i = 0; i < Math.min(rawRows.length, 15); i++) {
     const row = rawRows[i];
     if (Array.isArray(row)) {
       const text = row.join(" ");
-      if (text.includes("เลขรหัสนักเรียน") && text.includes("ชื่อ นามสกุล")) {
-        isGraduateDetailFormat = true;
-        gradHeaderIdx = i;
-        break;
+      if (
+        text.includes("รายงานติดตามภาวะการมีงานทำ") ||
+        (text.includes("เลขรหัสนักเรียน") && text.includes("ชื่อสถานที่ทำงาน")) ||
+        (text.includes("จบการศึกษาทั้งหมด") && text.includes("สรุปการมีงานทำ"))
+      ) {
+        throw new Error(
+          "ไฟล์ที่เลือกเป็น 'ไฟล์สรุปผลการติดตามผู้สำเร็จการศึกษา' กรุณาอัปโหลดในหมวดที่ 2 และใช้ไฟล์ 'รายงานสถานะการปรับปรุงข้อมูลนักเรียน นักศึกษา (SchoolStudentList)' สำหรับหมวดที่ 1"
+        );
       }
     }
-  }
-
-  if (isGraduateDetailFormat) {
-    const cleanDash = (val: any): string => {
-      const s = cleanStr(val);
-      return s === "-" ? "" : s;
-    };
-
-    const records: ParsedProfileStatusRecord[] = [];
-    for (let r = gradHeaderIdx + 1; r < rawRows.length; r++) {
-      const row = rawRows[r];
-      if (!row || row.length === 0) continue;
-
-      const fullName = cleanStr(row[0]);
-      const studentId = cleanStr(row[8]);
-      if (!fullName || !studentId || fullName === "ชื่อ นามสกุล" || fullName.includes("รวม")) continue;
-
-      let prefix = "";
-      let nameBody = fullName;
-      if (nameBody.startsWith("นาย ")) {
-        prefix = "นาย";
-        nameBody = nameBody.substring(4).trim();
-      } else if (nameBody.startsWith("นางสาว ")) {
-        prefix = "นางสาว";
-        nameBody = nameBody.substring(7).trim();
-      } else if (nameBody.startsWith("น.ส. ")) {
-        prefix = "นางสาว";
-        nameBody = nameBody.substring(5).trim();
-      }
-      const parts = nameBody.split(/\s+/);
-      const firstName = parts[0] || fullName;
-      const lastName = parts.slice(1).join(" ") || "";
-
-      const educationLevel = normalizeLevel(cleanStr(row[2]));
-      const faculty = cleanDash(row[4]);
-      const major = cleanDash(row[13]) || faculty;
-      const minor = cleanDash(row[13]) || faculty;
-
-      const citizenId = cleanDash(row[3]);
-      const birthDate = cleanDash(row[9]);
-      const email = cleanDash(row[10]);
-      const phone = cleanDash(row[11]);
-
-      const hasStudy = Boolean(cleanDash(row[16]) || cleanDash(row[17]) || cleanDash(row[18]) || cleanDash(row[19]) || cleanDash(row[20]));
-      const hasWork = Boolean(cleanDash(row[21]) || cleanDash(row[22]) || cleanDash(row[23]) || cleanDash(row[24]));
-      const hasDetailPlace = Boolean(cleanDash(row[17]) || cleanDash(row[21]) || cleanDash(row[22]));
-
-      // Compute profile completeness % based on filled fields in the report
-      let score = 20; // studentId + fullName + major
-      if (citizenId) score += 10;
-      if (birthDate) score += 5;
-      if (phone) score += 10;
-      if (email) score += 10;
-      if (hasStudy || hasWork) {
-        score += 35;
-        if (hasDetailPlace) score += 10;
-      }
-
-      const completeness = Math.min(100, score);
-
-      records.push({
-        studentId,
-        prefix,
-        firstName,
-        lastName,
-        educationLevel,
-        faculty,
-        major,
-        minor,
-        lastProfileUpdate: new Date(),
-        completeness,
-      });
-    }
-
-    const uniqueMap = new Map<string, ParsedProfileStatusRecord>();
-    for (const rec of records) {
-      uniqueMap.set(rec.studentId, rec);
-    }
-    const uniqueRecords = Array.from(uniqueMap.values());
-    const preview = uniqueRecords.slice(0, 10).map((r) => ({
-      "รหัสนักศึกษา": r.studentId,
-      "ชื่อ-นามสกุล": `${r.prefix ? r.prefix + " " : ""}${r.firstName} ${r.lastName}`.trim(),
-      "ระดับการศึกษา": r.educationLevel,
-      "ประเภทวิชา": r.faculty || "-",
-      "สาขาวิชา": r.major || "-",
-      "สาขางาน": r.minor || "-",
-      "ความสมบูรณ์": `${r.completeness}%`,
-    }));
-
-    return { records: uniqueRecords, preview, totalRows: uniqueRecords.length };
   }
 
   let headerRowIdx = 6;
@@ -233,38 +155,82 @@ export function parseProfileStatusExcel(buffer: Buffer | ArrayBuffer): {
     const row = rawRows[r];
     if (!row || row.length === 0) continue;
 
-    // Student ID is typically at index 1 or 2
+    // Student ID is typically at index 1 or 2 (8-12 digits; never 13-digit Citizen ID)
     let studentId = cleanStr(row[1]) || cleanStr(row[2]);
-    if (!studentId || !/^\d{8,14}$/.test(studentId)) {
+    if (!studentId || !/^\d{8,12}$/.test(studentId)) {
       // search first 4 cells
+      studentId = "";
       for (let c = 0; c < Math.min(4, row.length); c++) {
         const v = cleanStr(row[c]);
-        if (/^\d{8,14}$/.test(v)) {
+        if (/^\d{8,12}$/.test(v)) {
           studentId = v;
           break;
         }
       }
     }
 
-    if (!studentId || studentId.length < 5) continue;
+    if (!studentId || studentId.length < 8) continue;
 
-    // In report layout: [4]=prefix, [6]=firstName, [8]=lastName
-    let prefix = cleanStr(row[4]);
-    let firstName = cleanStr(row[6]) || cleanStr(row[5]);
-    let lastName = cleanStr(row[8]) || cleanStr(row[7]);
+    // Check if this is the compact 11-column cleaned format:
+    // [0]=No, [1]=StudentId, [2]=Prefix, [3]=FirstName, [4]=LastName, [5]=Level, [6]=Faculty, [7]=Major, [8]=Minor, [9]=LastUpdate, [10]=Completeness
+    const isCompactCleanedFormat =
+      row.length <= 12 &&
+      (cleanStr(row[5]).includes("ประกาศนียบัตร") ||
+        cleanStr(row[5]).includes("ปริญญา") ||
+        cleanStr(row[5]).includes("ปวช") ||
+        cleanStr(row[5]).includes("ปวส"));
 
-    // Handle single cell combined names if needed
-    if (!firstName) {
-      for (let c = 4; c <= 8; c++) {
-        const val = cleanStr(row[c]);
-        if (val && !/^\d+$/.test(val) && !val.includes("ประกาศนียบัตร") && !val.includes("อุตสาหกรรม")) {
-          if (!firstName) firstName = val;
-          else if (!lastName && val !== firstName) {
-            lastName = val;
-            break;
+    let prefix = "";
+    let firstName = "";
+    let lastName = "";
+    let levelRaw = "";
+    let faculty = "";
+    let major = "";
+    let minor = "";
+    let lastProfileUpdate: Date | null = null;
+    let compVal: any = "";
+
+    if (isCompactCleanedFormat) {
+      prefix = cleanStr(row[2]);
+      firstName = cleanStr(row[3]);
+      lastName = cleanStr(row[4]);
+      levelRaw = cleanStr(row[5]);
+      faculty = cleanStr(row[6]);
+      major = cleanStr(row[7]);
+      minor = cleanStr(row[8]);
+      lastProfileUpdate = parseDate(row[9]);
+      compVal = row[10] ?? row[row.length - 1];
+    } else {
+      // Standard V-COP report layout: [4]=prefix, [6]=firstName, [8]=lastName
+      prefix = cleanStr(row[4]);
+      firstName = cleanStr(row[6]) || cleanStr(row[5]);
+      lastName = cleanStr(row[8]) || cleanStr(row[7]);
+
+      // Handle single cell combined names if needed
+      if (!firstName) {
+        for (let c = 4; c <= 8; c++) {
+          const val = cleanStr(row[c]);
+          if (val && !/^\d+$/.test(val) && !val.includes("ประกาศนียบัตร") && !val.includes("อุตสาหกรรม")) {
+            if (!firstName) firstName = val;
+            else if (!lastName && val !== firstName) {
+              lastName = val;
+              break;
+            }
           }
         }
       }
+
+      // [11]=Level, [13]=Faculty, [15]=Major, [17]=Minor
+      levelRaw = cleanStr(row[11]) || cleanStr(row[10]) || cleanStr(row[7]);
+      faculty = cleanStr(row[13]) || cleanStr(row[12]) || cleanStr(row[8]);
+      major = cleanStr(row[15]) || cleanStr(row[14]) || cleanStr(row[9]);
+      minor = cleanStr(row[17]) || cleanStr(row[16]) || cleanStr(row[10]);
+
+      // [18] or [19] = last update date
+      lastProfileUpdate = parseDate(row[18] || row[19]);
+
+      // [21] or [20] or last cell = completeness percent
+      compVal = row[21] || row[20] || row[row.length - 1];
     }
 
     if (firstName.startsWith("นาย ")) {
@@ -278,19 +244,7 @@ export function parseProfileStatusExcel(buffer: Buffer | ArrayBuffer): {
       firstName = firstName.substring(5).trim();
     }
 
-    // [11]=Level, [13]=Faculty, [15]=Major, [17]=Minor
-    let levelRaw = cleanStr(row[11]) || cleanStr(row[10]) || cleanStr(row[7]);
-    let faculty = cleanStr(row[13]) || cleanStr(row[12]) || cleanStr(row[8]);
-    let major = cleanStr(row[15]) || cleanStr(row[14]) || cleanStr(row[9]);
-    let minor = cleanStr(row[17]) || cleanStr(row[16]) || cleanStr(row[10]);
-
     const educationLevel = normalizeLevel(levelRaw);
-
-    // [18] or [19] = last update date
-    const lastProfileUpdate = parseDate(row[18] || row[19]);
-
-    // [21] or last cell = completeness percent
-    let compVal = row[21] || row[20] || row[row.length - 1];
     const completeness = parseCompleteness(compVal);
 
     records.push({
@@ -346,6 +300,22 @@ export function parseGraduateTrackingExcel(buffer: Buffer | ArrayBuffer): {
 
   if (rawRows.length === 0) {
     return { records: [], preview: [], totalRows: 0 };
+  }
+
+  // Prevent accidentally uploading a Student Profile Status file into the Graduate Tracking category
+  for (let i = 0; i < Math.min(rawRows.length, 15); i++) {
+    const row = rawRows[i];
+    if (Array.isArray(row)) {
+      const text = row.join(" ");
+      if (
+        text.includes("วันที่อัปเดตโปรไฟล์") ||
+        (text.includes("รหัสนักศึกษา") && text.includes("ความสมบูรณ์"))
+      ) {
+        throw new Error(
+          "ไฟล์ที่เลือกเป็น 'ไฟล์สถานะการปรับปรุงข้อมูลนักเรียน นักศึกษา' กรุณาอัปโหลดในหมวดที่ 1 และใช้ไฟล์ 'รายงานติดตามภาวะการมีงานทำของผู้สำเร็จการศึกษา' สำหรับหมวดที่ 2"
+        );
+      }
+    }
   }
 
   // 1. Check if this is the Summary by Subject Type report (รายงานภาวะการมีงานทำและศึกษาต่อของผู้สำเร็จการศึกษา จำแนกตามประเภทวิชา)

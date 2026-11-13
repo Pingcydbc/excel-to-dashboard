@@ -8,6 +8,7 @@ import {
   Briefcase, 
   Building2, 
   UploadCloud, 
+  Printer,
   LogOut, 
   ShieldCheck,
   Menu,
@@ -18,6 +19,7 @@ import { useState, useEffect } from "react";
 export default function Navbar() {
   const pathname = usePathname();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -27,11 +29,16 @@ export default function Navbar() {
       .then((data) => {
         if (data.authenticated) {
           setIsAdmin(true);
+          setUserRole(data.user?.role || "ADMIN");
         } else {
           setIsAdmin(false);
+          setUserRole(null);
         }
       })
-      .catch(() => setIsAdmin(false));
+      .catch(() => {
+        setIsAdmin(false);
+        setUserRole(null);
+      });
   }, [pathname]);
 
   const handleLogout = async () => {
@@ -101,16 +108,29 @@ export default function Navbar() {
             {isAdmin ? (
               <div className="flex items-center gap-2">
                 <Link
-                  href="/admin/upload"
+                  href="/admin/reports"
                   className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold shadow-sm transition ${
-                    pathname === "/admin/upload"
-                      ? "bg-emerald-600 text-white"
-                      : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200"
+                    pathname === "/admin/reports"
+                      ? "bg-indigo-600 text-white"
+                      : "bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200"
                   }`}
                 >
-                  <UploadCloud className="w-3.5 h-3.5" />
-                  จัดการไฟล์ Excel
+                  <Printer className="w-3.5 h-3.5" />
+                  พิมพ์รายงาน PDF
                 </Link>
+                {userRole?.toUpperCase() === "ADMIN" && (
+                  <Link
+                    href="/admin/upload"
+                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold shadow-sm transition ${
+                      pathname === "/admin/upload"
+                        ? "bg-emerald-600 text-white"
+                        : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200"
+                    }`}
+                  >
+                    <UploadCloud className="w-3.5 h-3.5" />
+                    จัดการไฟล์ Excel
+                  </Link>
+                )}
                 <button
                   onClick={handleLogout}
                   className="flex items-center gap-1 px-2.5 py-2 rounded-xl text-xs text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition"
@@ -167,17 +187,28 @@ export default function Navbar() {
           })}
           <div className="pt-2 border-t border-slate-100">
             {isAdmin ? (
-              <div className="flex items-center justify-between pt-1">
-                <Link
-                  href="/admin/upload"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-2 text-sm font-medium text-emerald-700"
-                >
-                  <UploadCloud className="w-4 h-4" /> จัดการไฟล์ Excel (Admin)
-                </Link>
+              <div className="space-y-2 pt-1">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Link
+                    href="/admin/reports"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-2 text-sm font-medium text-indigo-700"
+                  >
+                    <Printer className="w-4 h-4" /> พิมพ์รายงาน PDF
+                  </Link>
+                  {userRole?.toUpperCase() === "ADMIN" && (
+                    <Link
+                      href="/admin/upload"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center gap-2 text-sm font-medium text-emerald-700"
+                    >
+                      <UploadCloud className="w-4 h-4" /> จัดการไฟล์ Excel
+                    </Link>
+                  )}
+                </div>
                 <button
                   onClick={handleLogout}
-                  className="text-xs text-rose-600 hover:underline"
+                  className="text-xs text-rose-600 hover:underline block"
                 >
                   ออกจากระบบ
                 </button>

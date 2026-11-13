@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentAdmin } from "@/lib/auth";
 import fs from "fs";
 import path from "path";
 import { parseProfileStatusExcel, parseGraduateTrackingExcel } from "@/lib/excel-parser";
@@ -8,6 +9,10 @@ export const dynamic = "force-dynamic";
 
 export async function POST() {
   try {
+    const admin = await getCurrentAdmin();
+    if (!admin || admin.role?.toUpperCase() !== "ADMIN") {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
+    }
     let profileImported = 0;
     let graduateImported = 0;
 

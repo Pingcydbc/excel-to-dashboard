@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,20 @@ export async function GET() {
 
 export async function DELETE(req: NextRequest) {
   try {
+    const admin = await getCurrentAdmin();
+    if (!admin) {
+      return NextResponse.json(
+        { success: false, error: "กรุณาเข้าสู่ระบบก่อนดำเนินการ" },
+        { status: 401 }
+      );
+    }
+    if (admin.role?.toUpperCase() !== "ADMIN") {
+      return NextResponse.json(
+        { success: false, error: "บัญชีระดับ Report ไม่มีสิทธิ์ลบข้อมูล" },
+        { status: 403 }
+      );
+    }
+
     const { searchParams } = new URL(req.url);
     const logId = searchParams.get("id");
     const clearType = searchParams.get("clearType"); // 'profile_status' | 'graduate_tracking' | 'all'

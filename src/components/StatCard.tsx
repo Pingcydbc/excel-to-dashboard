@@ -9,6 +9,8 @@ interface StatCardProps {
   color?: "indigo" | "emerald" | "blue" | "amber" | "purple" | "rose";
   trend?: string;
   trendPositive?: boolean;
+  topContent?: React.ReactNode;
+  extraContent?: React.ReactNode;
 }
 
 const colorStyles = {
@@ -58,14 +60,19 @@ export default function StatCard({
   color = "indigo",
   trend,
   trendPositive = true,
+  topContent,
+  extraContent,
 }: StatCardProps) {
   const styles = colorStyles[color] || colorStyles.indigo;
 
   return (
     <div className={`bg-white rounded-2xl p-5 border ${styles.border} shadow-sm hover:shadow-md transition duration-200 flex flex-col justify-between`}>
-      <div className="flex items-start justify-between">
-        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{title}</span>
-        <div className={`w-10 h-10 rounded-xl ${styles.iconBg} text-white flex items-center justify-center shadow-sm`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="space-y-1.5 flex-1 min-w-0">
+          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">{title}</span>
+          {topContent && <div>{topContent}</div>}
+        </div>
+        <div className={`w-10 h-10 rounded-xl ${styles.iconBg} text-white flex items-center justify-center shadow-sm shrink-0`}>
           <Icon className="w-5 h-5" />
         </div>
       </div>
@@ -85,6 +92,7 @@ export default function StatCard({
             <span>{subtitle}</span>
           </p>
         )}
+        {extraContent && <div className="mt-2.5 pt-2.5 border-t border-slate-100">{extraContent}</div>}
       </div>
     </div>
   );

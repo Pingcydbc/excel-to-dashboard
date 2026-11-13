@@ -13,7 +13,8 @@ import {
   Clock,
   FileSpreadsheet,
   AlertTriangle,
-  Timer
+  Timer,
+  Printer
 } from "lucide-react";
 import Link from "next/link";
 import FileUploader from "@/components/FileUploader";
@@ -65,7 +66,20 @@ export default function AdminUploadPage() {
   };
 
   useEffect(() => {
-    fetchDataInfo();
+    fetch("/api/auth/me")
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.authenticated || !data.user) {
+          window.location.href = "/admin/login";
+        } else if (data.user.role?.toUpperCase() !== "ADMIN") {
+          window.location.href = "/admin/reports";
+        } else {
+          fetchDataInfo();
+        }
+      })
+      .catch(() => {
+        window.location.href = "/admin/login";
+      });
   }, []);
 
   // Delete specific uploaded file
@@ -132,6 +146,13 @@ export default function AdminUploadPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Link
+            href="/admin/reports"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition shadow-sm"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            พิมพ์รายงาน PDF
+          </Link>
           <button
             onClick={fetchDataInfo}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition shadow-sm"

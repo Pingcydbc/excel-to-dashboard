@@ -14,7 +14,11 @@ export async function GET(req: NextRequest) {
 
     const where: any = {
       companyName: { not: null },
-      NOT: [{ companyName: "" }, { companyName: "-" }],
+      NOT: [
+        { companyName: "" },
+        { companyName: "-" },
+        { companyName: "ประกอบอาชีพอิสระ / ไม่ระบุสถานประกอบการ" },
+      ],
     };
 
     if (search) {
@@ -22,7 +26,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (major && major !== "all") {
-      where.major = { contains: major };
+      where.major = major.trim();
     }
 
     // Group by companyName

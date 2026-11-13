@@ -62,6 +62,13 @@ export default function OverviewDashboardPage() {
   const employmentStats = stats?.employmentStats || {};
   const companyStats = stats?.companyStats || {};
   const filterMeta = stats?.filters || { years: [], majors: [] };
+  const latestUploadDateStr = stats?.latestUploadDate
+    ? new Date(stats.latestUploadDate).toLocaleDateString("th-TH", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      })
+    : null;
 
   return (
     <div className="space-y-6" id="dashboard-content">
@@ -80,6 +87,12 @@ export default function OverviewDashboardPage() {
           <p className="text-xs text-slate-500 mt-0.5">
             ระบบติดตาม 3 เสาหลัก: สถานะการปรับปรุงข้อมูล (ศธ.02) • ภาวะการมีงานทำ • สถิติสถานประกอบการ
           </p>
+          <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold">
+            <span>📅 ข้อมูลอัปเดต ณ วันที่:</span>
+            <span className="text-indigo-700 font-bold">
+              {latestUploadDateStr || "ยังไม่มีการอัปโหลดข้อมูล"}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -183,21 +196,21 @@ export default function OverviewDashboardPage() {
 
             <div className="space-y-2.5">
               <div className="flex items-center justify-between text-xs p-2.5 bg-white rounded-xl border border-slate-200/70">
-                <span className="text-slate-600 font-medium">สมบูรณ์ดี (≥ 80%)</span>
+                <span className="text-slate-600 font-medium">นักศึกษาทั้งหมด</span>
+                <span className="font-bold text-indigo-600">
+                  {profileStats.totalStudents?.toLocaleString() || 0} คน
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs p-2.5 bg-white rounded-xl border border-slate-200/70">
+                <span className="text-slate-600 font-medium">ความสมบูรณ์ 100%</span>
                 <span className="font-bold text-emerald-600">
-                  {profileStats.completedStudents?.toLocaleString() || 0} คน
+                  {profileStats.full100Students?.toLocaleString() || 0} คน
                 </span>
               </div>
               <div className="flex items-center justify-between text-xs p-2.5 bg-white rounded-xl border border-slate-200/70">
-                <span className="text-slate-600 font-medium">ปานกลาง (50-79%)</span>
-                <span className="font-bold text-amber-600">
-                  {profileStats.mediumStudents?.toLocaleString() || 0} คน
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-xs p-2.5 bg-white rounded-xl border border-slate-200/70">
-                <span className="text-slate-600 font-medium">ต้องปรับปรุง (&lt; 50%)</span>
+                <span className="text-slate-600 font-medium">ต่ำกว่า 100%</span>
                 <span className="font-bold text-rose-600">
-                  {profileStats.lowStudents?.toLocaleString() || 0} คน
+                  {profileStats.below100Students?.toLocaleString() || 0} คน
                 </span>
               </div>
             </div>
@@ -206,7 +219,7 @@ export default function OverviewDashboardPage() {
               href="/profile-status"
               className="w-full text-center py-2.5 rounded-xl bg-white border border-indigo-200 text-indigo-600 text-xs font-bold hover:bg-indigo-50 transition no-print shadow-sm"
             >
-              ค้นหารายชื่อนักศึกษาที่ต้องปรับปรุงข้อมูล →
+              ดูสถิติสถานะการปรับปรุงข้อมูล →
             </Link>
           </div>
         </div>

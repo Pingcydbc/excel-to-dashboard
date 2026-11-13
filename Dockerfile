@@ -21,6 +21,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+ENV DATABASE_URL="postgresql://postgres:postgres@localhost:5432/student_dashboard?schema=public"
 
 # Generate Prisma Client
 RUN npx prisma generate
@@ -45,7 +46,8 @@ ENV DATABASE_URL="postgresql://postgres:password123@postgres-db:5432/student_das
 
 # Create a non-root system user for security
 RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nextjs
+    adduser --system --uid 1001 nextjs && \
+    chown -R nextjs:nodejs /app
 
 # Copy built application and production dependencies with ownership
 COPY --chown=nextjs:nodejs --from=builder /app/package.json ./package.json
