@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseProfileStatusExcel, parseGraduateTrackingExcel } from "@/lib/excel-parser";
 import { getCurrentAdmin } from "@/lib/auth";
+import { filterProfilesWithRms } from "@/lib/rms";
 
 export const dynamic = "force-dynamic";
 
@@ -86,15 +87,12 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // Replace existing records for these studentIds so re-uploads update cleanly
+      // Replace existing profile_status records so re-uploading a new file updates cleanly
+      await prisma.studentProfileStatus.deleteMany({});
       let savedCount = 0;
       const chunkSize = 2000;
       for (let i = 0; i < records.length; i += chunkSize) {
         const chunk = records.slice(i, i + chunkSize);
-        const ids = chunk.map((item) => item.studentId);
-        await prisma.studentProfileStatus.deleteMany({
-          where: { studentId: { in: ids } },
-        });
         const res = await prisma.studentProfileStatus.createMany({
           data: chunk.map((item) => ({
             ...item,
@@ -105,20 +103,22 @@ export async function POST(req: NextRequest) {
         savedCount += res.count;
       }
 
+      const { filtered: activeProfiles } = await filterProfilesWithRms(records);
+      const effectiveCount = activeProfiles.length || savedCount;
       const durationMs = Date.now() - startTime;
       await prisma.uploadLog.update({
         where: { id: uploadLog.id },
         data: {
-          recordCount: savedCount,
+          recordCount: effectiveCount,
           durationMs,
-          message: `นำเข้าข้อมูลสถานะการปรับปรุงสำเร็จ ${savedCount} รายการ (ใช้เวลา ${(durationMs / 1000).toFixed(2)} วินาที)`,
+          message: `นำเข้าข้อมูลสำเร็จ แสดงผลตามระบบ RMS ${effectiveCount.toLocaleString()} รายการ (จากไฟล์ดิบ ${savedCount.toLocaleString()} รายการ • ใช้เวลา ${(durationMs / 1000).toFixed(2)} วินาที)`,
         },
       });
 
       return NextResponse.json({
         success: true,
-        message: `นำเข้าข้อมูลนักเรียนสำเร็จ ${savedCount} รายการ (ใช้เวลา ${(durationMs / 1000).toFixed(2)} วินาที)`,
-        savedCount,
+        message: `นำเข้าข้อมูลสำเร็จ แสดงผลตามระบบ RMS ${effectiveCount.toLocaleString()} รายการ (ใช้เวลา ${(durationMs / 1000).toFixed(2)} วินาที)`,
+        savedCount: effectiveCount,
         totalRows,
         durationMs,
         uploadLogId: uploadLog.id,
@@ -156,14 +156,11 @@ export async function POST(req: NextRequest) {
         },
       });
 
+      await prisma.graduateTracking.deleteMany({});
       let savedCount = 0;
       const chunkSize = 2000;
       for (let i = 0; i < records.length; i += chunkSize) {
         const chunk = records.slice(i, i + chunkSize);
-        const ids = chunk.map((item) => item.studentId);
-        await prisma.graduateTracking.deleteMany({
-          where: { studentId: { in: ids } },
-        });
         const res = await prisma.graduateTracking.createMany({
           data: chunk.map((item) => ({
             ...item,

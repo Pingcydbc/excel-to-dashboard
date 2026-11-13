@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { filterByDefaultCohort, matchesMajorFilter } from "@/lib/utils";
+import { matchesMajorFilter } from "@/lib/utils";
+import { filterProfilesWithRms } from "@/lib/rms";
 
 export const dynamic = "force-dynamic";
 
@@ -37,8 +38,12 @@ export async function GET(req: NextRequest) {
       orderBy: [{ completeness: "desc" }, { studentId: "asc" }],
     });
 
-    // 1. Apply Default Cohort Filter from Excel dataset (ปวช. ย้อนหลัง 2 ปี / ปวส. 1 ปี / ป.ตรี 1 ปี)
-    const { filtered: cohortStudents, baseYearPrefix } = filterByDefaultCohort(allStudents);
+    // 1. Filter against live RMS API (with automatic fallback to cohort rule)
+    const {
+      filtered: cohortStudents,
+      baseYearPrefix,
+      rmsComparison,
+    } = await filterProfilesWithRms(allStudents);
 
     // 2. Apply UI / Report filters
     const filtered = cohortStudents.filter((s) => {
@@ -84,6 +89,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       success: true,
       baseYear: baseYearPrefix ? baseYearPrefix + 2500 : null,
+      rmsComparison,
       data: students,
       pagination: {
         page,

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentAdmin } from "@/lib/auth";
-import { filterByDefaultCohort } from "@/lib/utils";
+import { filterProfilesWithRms } from "@/lib/rms";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +9,15 @@ export async function GET() {
   try {
     const [allProfiles, graduateCount, logs] = await Promise.all([
       prisma.studentProfileStatus.findMany({
-        select: { studentId: true, educationLevel: true },
+        select: {
+          id: true,
+          studentId: true,
+          firstName: true,
+          lastName: true,
+          educationLevel: true,
+          major: true,
+          completeness: true,
+        },
       }),
       prisma.graduateTracking.count(),
       prisma.uploadLog.findMany({
@@ -17,7 +25,7 @@ export async function GET() {
         take: 20,
       }),
     ]);
-    const profileCount = filterByDefaultCohort(allProfiles).filtered.length;
+    const profileCount = (await filterProfilesWithRms(allProfiles)).filtered.length;
 
     return NextResponse.json({
       success: true,

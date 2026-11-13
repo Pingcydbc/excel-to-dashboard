@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { filterByDefaultCohort, matchesMajorFilter } from "@/lib/utils";
+import { matchesMajorFilter } from "@/lib/utils";
+import { filterProfilesWithRms } from "@/lib/rms";
 import { parseProfileStatusExcel } from "@/lib/excel-parser";
 import fs from "fs";
 import path from "path";
@@ -94,8 +95,13 @@ export async function GET(req: NextRequest) {
     const [allProfilesRaw, allGraduatesRaw, latestProfileLog, latestGradLog] = await Promise.all([
       prisma.studentProfileStatus.findMany({
         select: {
+          id: true,
           studentId: true,
+          prefix: true,
+          firstName: true,
+          lastName: true,
           educationLevel: true,
+          faculty: true,
           major: true,
           completeness: true,
         },
@@ -125,11 +131,13 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
-    // 1. Apply Default Cohort Filter to Student Profile Status only:
-    // ปวช.: ย้อนหลัง 2 ปี, ปวส.: ย้อนหลัง 1 ปี, ป.ตรี: ย้อนหลัง 1 ปี
+    // 1. Filter Student Profile Status against live RMS API (with fallback to cohort rule)
     // ส่วนสถานะการมีงานทำ (Graduate Tracking) แสดงข้อมูลผู้สำเร็จการศึกษาทั้งหมดตามไฟล์
-    const { filtered: cohortProfiles, baseYearPrefix: profileBaseYear } =
-      filterByDefaultCohort(allProfilesRaw);
+    const {
+      filtered: cohortProfiles,
+      baseYearPrefix: profileBaseYear,
+      rmsComparison,
+    } = await filterProfilesWithRms(allProfilesRaw);
     const cohortGraduates = allGraduatesRaw;
     const gradBaseYear =
       cohortGraduates.length > 0
@@ -382,6 +390,7 @@ export async function GET(req: NextRequest) {
       latestUploadDate: latestProfileLog?.createdAt || latestGradLog?.createdAt || null,
       latestProfileUploadDate: latestProfileLog?.createdAt || null,
       latestGradUploadDate: latestGradLog?.createdAt || null,
+      rmsComparison,
       cohortBaseYear: {
         profileBaseYear: profileBaseYear ? profileBaseYear + 2500 : null,
         gradBaseYear: gradBaseYear ? gradBaseYear + 2500 : null,

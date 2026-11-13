@@ -43,6 +43,8 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - REPORT_EMAIL=${REPORT_EMAIL}
       - REPORT_PASSWORD=${REPORT_PASSWORD}
+      - RMS_API_URL=${RMS_API_URL}
+      - RMS_API_TOKEN=${RMS_API_TOKEN}
     depends_on:
       - postgres-db
     networks:
