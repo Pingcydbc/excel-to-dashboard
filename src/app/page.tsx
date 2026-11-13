@@ -62,13 +62,17 @@ export default function OverviewDashboardPage() {
   const employmentStats = stats?.employmentStats || {};
   const companyStats = stats?.companyStats || {};
   const filterMeta = stats?.filters || { years: [], majors: [] };
-  const latestUploadDateStr = stats?.latestUploadDate
-    ? new Date(stats.latestUploadDate).toLocaleDateString("th-TH", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      })
-    : null;
+  const formatThaiDate = (dateVal?: string | null) =>
+    dateVal
+      ? new Date(dateVal).toLocaleDateString("th-TH", {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        })
+      : null;
+
+  const latestProfileDateStr = formatThaiDate(stats?.latestProfileUploadDate);
+  const latestGradDateStr = formatThaiDate(stats?.latestGradUploadDate);
 
   return (
     <div className="space-y-6" id="dashboard-content">
@@ -87,11 +91,19 @@ export default function OverviewDashboardPage() {
           <p className="text-xs text-slate-500 mt-0.5">
             ระบบติดตาม 3 เสาหลัก: สถานะการปรับปรุงข้อมูล (ศธ.02) • ภาวะการมีงานทำ • สถิติสถานประกอบการ
           </p>
-          <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold">
-            <span>📅 ข้อมูลอัปเดต ณ วันที่:</span>
-            <span className="text-indigo-700 font-bold">
-              {latestUploadDateStr || "ยังไม่มีการอัปโหลดข้อมูล"}
-            </span>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-slate-700 text-xs font-semibold">
+              <span>📅 1. ปรับปรุงข้อมูลอัปเดต ณ วันที่:</span>
+              <span className="text-emerald-700 font-bold">
+                {latestProfileDateStr || "ยังไม่มีการอัปโหลดข้อมูล"}
+              </span>
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-slate-700 text-xs font-semibold">
+              <span>📅 2. ติดตามผู้สำเร็จการศึกษาอัปเดต ณ วันที่:</span>
+              <span className="text-indigo-700 font-bold">
+                {latestGradDateStr || "ยังไม่มีการอัปโหลดข้อมูล"}
+              </span>
+            </div>
           </div>
         </div>
       </div>

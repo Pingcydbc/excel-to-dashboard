@@ -90,8 +90,8 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Fetch lightweight rows from both tables + latest upload log in parallel
-    const [allProfilesRaw, allGraduatesRaw, latestUploadLog] = await Promise.all([
+    // Fetch lightweight rows from both tables + latest upload logs per fileType in parallel
+    const [allProfilesRaw, allGraduatesRaw, latestProfileLog, latestGradLog] = await Promise.all([
       prisma.studentProfileStatus.findMany({
         select: {
           studentId: true,
@@ -114,18 +114,27 @@ export async function GET(req: NextRequest) {
         },
       }),
       prisma.uploadLog.findFirst({
-        where: { status: "SUCCESS" },
+        where: { status: "SUCCESS", fileType: "profile_status" },
+        orderBy: { createdAt: "desc" },
+        select: { createdAt: true, fileName: true },
+      }),
+      prisma.uploadLog.findFirst({
+        where: { status: "SUCCESS", fileType: "graduate_tracking" },
         orderBy: { createdAt: "desc" },
         select: { createdAt: true, fileName: true },
       }),
     ]);
 
-    // 1. Apply Default Cohort Filter (Item 13):
-    // ปวช.: ย้อนหลัง 2 ปี, ปวส.: ย้อนหลัง 1 ปี, ป.ตรี: ย้อนหลัง 1 ปี (อิงตามปีตั้งต้นในไฟล์ Excel)
+    // 1. Apply Default Cohort Filter to Student Profile Status only:
+    // ปวช.: ย้อนหลัง 2 ปี, ปวส.: ย้อนหลัง 1 ปี, ป.ตรี: ย้อนหลัง 1 ปี
+    // ส่วนสถานะการมีงานทำ (Graduate Tracking) แสดงข้อมูลผู้สำเร็จการศึกษาทั้งหมดตามไฟล์
     const { filtered: cohortProfiles, baseYearPrefix: profileBaseYear } =
       filterByDefaultCohort(allProfilesRaw);
-    const { filtered: cohortGraduates, baseYearPrefix: gradBaseYear } =
-      filterByDefaultCohort(allGraduatesRaw);
+    const cohortGraduates = allGraduatesRaw;
+    const gradBaseYear =
+      cohortGraduates.length > 0
+        ? Math.max(...cohortGraduates.map((g) => g.gradYear || 0)) - 2500
+        : null;
 
     // Collect available filter options from cohort-filtered data
     const profileMajors = Array.from(
@@ -370,7 +379,9 @@ export async function GET(req: NextRequest) {
     }));
 
     const responseData = {
-      latestUploadDate: latestUploadLog?.createdAt || null,
+      latestUploadDate: latestProfileLog?.createdAt || latestGradLog?.createdAt || null,
+      latestProfileUploadDate: latestProfileLog?.createdAt || null,
+      latestGradUploadDate: latestGradLog?.createdAt || null,
       cohortBaseYear: {
         profileBaseYear: profileBaseYear ? profileBaseYear + 2500 : null,
         gradBaseYear: gradBaseYear ? gradBaseYear + 2500 : null,

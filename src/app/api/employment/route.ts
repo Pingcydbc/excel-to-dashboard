@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { filterByDefaultCohort, matchesMajorFilter } from "@/lib/utils";
+import { matchesMajorFilter } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -21,8 +21,12 @@ export async function GET(req: NextRequest) {
       orderBy: [{ gradYear: "desc" }, { studentId: "asc" }],
     });
 
-    // 1. Apply Default Cohort Filter from Excel dataset (ปวช. ย้อนหลัง 2 ปี / ปวส. 1 ปี / ป.ตรี 1 ปี)
-    const { filtered: cohortGraduates, baseYearPrefix } = filterByDefaultCohort(allGraduates);
+    // แสดงข้อมูลผู้สำเร็จการศึกษาทั้งหมดตามไฟล์ (ไม่ตัดรุ่นรหัสนักศึกษา)
+    const cohortGraduates = allGraduates;
+    const maxGradYear =
+      cohortGraduates.length > 0
+        ? Math.max(...cohortGraduates.map((g) => g.gradYear || 0))
+        : null;
 
     const parsedYear = year && year !== "all" ? parseInt(year, 10) : NaN;
 
@@ -83,7 +87,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      baseYear: baseYearPrefix ? baseYearPrefix + 2500 : null,
+      baseYear: maxGradYear,
       data: graduates,
       pagination: {
         page,
