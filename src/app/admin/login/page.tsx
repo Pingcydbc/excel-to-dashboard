@@ -66,16 +66,16 @@ export default function AdminLoginPage() {
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-              อีเมลผู้ดูแลระบบ (Admin Email)
+              ชื่อผู้ใช้หรืออีเมล (Username / Email)
             </label>
             <div className="relative">
               <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
-                type="email"
+                type="text"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="กรอกอีเมลผู้ดูแลระบบ..."
+                placeholder="กรอกชื่อผู้ใช้หรืออีเมล..."
                 className="w-full pl-10 pr-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition"
               />
             </div>

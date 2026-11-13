@@ -4,6 +4,14 @@ import { comparePassword, hashPassword, signToken } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
+function matchesEnvPassword(inputPassword: string, envPassword: string): boolean {
+  if (!envPassword) return false;
+  if (inputPassword === envPassword) return true;
+  // Handle Portainer / Docker Compose env parser collapsing "$$" into "$"
+  if (inputPassword.replace(/\$\$/g, "$") === envPassword) return true;
+  return false;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json();
@@ -16,38 +24,52 @@ export async function POST(req: NextRequest) {
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    const envAdminEmail = (process.env.ADMIN_EMAIL || "admin@gmail.com").trim().toLowerCase();
-    const envAdminPassword = process.env.ADMIN_PASSWORD || "admincmtcvcop123";
-    const envReportEmail = (process.env.REPORT_EMAIL || "report@gmail.com").trim().toLowerCase();
-    const envReportPassword = process.env.REPORT_PASSWORD || "reportcmtcvcop123";
+    const envAdminEmail = (process.env.ADMIN_EMAIL || "").trim().toLowerCase();
+    const envAdminPassword = process.env.ADMIN_PASSWORD || "";
+    const envReportEmail = (process.env.REPORT_EMAIL || "").trim().toLowerCase();
+    const envReportPassword = process.env.REPORT_PASSWORD || "";
 
-    let admin = await prisma.adminUser.findUnique({
-      where: { email: cleanEmail },
-    });
+    let admin = null;
 
-    // Auto-create or sync initial accounts if matching env credentials
-    if (!admin) {
-      if (cleanEmail === envAdminEmail && password === envAdminPassword) {
-        const hashedPassword = hashPassword(envAdminPassword);
-        admin = await prisma.adminUser.create({
-          data: {
-            email: envAdminEmail,
-            password: hashedPassword,
-            name: "ผู้ดูแลระบบ (Admin)",
-            role: "ADMIN",
-          },
-        });
-      } else if (cleanEmail === envReportEmail && password === envReportPassword) {
-        const hashedPassword = hashPassword(envReportPassword);
-        admin = await prisma.adminUser.create({
-          data: {
-            email: envReportEmail,
-            password: hashedPassword,
-            name: "ผู้ดูและพิมพ์รายงาน (Report)",
-            role: "REPORT",
-          },
-        });
-      }
+    // Sync directly with environment variables if credentials match .env / Portainer ENV
+    if (
+      envAdminEmail &&
+      envAdminPassword &&
+      cleanEmail === envAdminEmail &&
+      matchesEnvPassword(password, envAdminPassword)
+    ) {
+      const hashedPassword = hashPassword(password);
+      admin = await prisma.adminUser.upsert({
+        where: { email: envAdminEmail },
+        update: { password: hashedPassword, role: "ADMIN" },
+        create: {
+          email: envAdminEmail,
+          password: hashedPassword,
+          name: "ผู้ดูแลระบบ (Admin)",
+          role: "ADMIN",
+        },
+      });
+    } else if (
+      envReportEmail &&
+      envReportPassword &&
+      cleanEmail === envReportEmail &&
+      matchesEnvPassword(password, envReportPassword)
+    ) {
+      const hashedPassword = hashPassword(password);
+      admin = await prisma.adminUser.upsert({
+        where: { email: envReportEmail },
+        update: { password: hashedPassword, role: "REPORT" },
+        create: {
+          email: envReportEmail,
+          password: hashedPassword,
+          name: "ผู้ดูและพิมพ์รายงาน (Report)",
+          role: "REPORT",
+        },
+      });
+    } else {
+      admin = await prisma.adminUser.findUnique({
+        where: { email: cleanEmail },
+      });
     }
 
     if (!admin) {

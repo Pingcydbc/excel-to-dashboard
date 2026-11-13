@@ -4,14 +4,10 @@ set -e
 echo "🚀 Starting V-COP CMTC Dashboard App..."
 
 # Ensure DATABASE_URL is always set and exported for Prisma & Next.js
-if [ -z "$DATABASE_URL" ]; then
-  DB_USER="${DB_USER:-postgres}"
-  DB_PASSWORD="${DB_PASSWORD:-password123}"
+if [ -z "$DATABASE_URL" ] && [ -n "$DB_USER" ] && [ -n "$DB_PASSWORD" ] && [ -n "$DB_NAME" ]; then
   DB_HOST="${DB_HOST:-postgres-db}"
   DB_PORT="${DB_PORT:-5432}"
-  DB_NAME="${DB_NAME:-student_dashboard}"
   export DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?schema=public"
-  echo "ℹ️ DATABASE_URL was not set; using default container database connection (${DB_HOST}:${DB_PORT}/${DB_NAME})"
 else
   export DATABASE_URL
 fi
@@ -24,51 +20,55 @@ if [ -n "$DATABASE_URL" ]; then
   echo "📦 Syncing Prisma Database Schema..."
   node ./node_modules/prisma/build/index.js db push --accept-data-loss --skip-generate || true
   
-  echo "👤 Ensuring Admin Account from Environment..."
+  echo "👤 Syncing Accounts from Environment..."
   node -e "
     const { PrismaClient } = require('@prisma/client');
     const bcrypt = require('bcryptjs');
     const prisma = new PrismaClient({
       datasources: { db: { url: process.env.DATABASE_URL } }
     });
-    async function initAdmin() {
+    async function initAccounts() {
       try {
-        const email = (process.env.ADMIN_EMAIL || 'admin@gmail.com').trim().toLowerCase();
-        const password = process.env.ADMIN_PASSWORD || 'admincmtcvcop123';
-        const hash = bcrypt.hashSync(password, 10);
-        const admin = await prisma.adminUser.upsert({
-          where: { email },
-          update: { password: hash, role: 'ADMIN' },
-          create: {
-            email,
-            password: hash,
-            name: 'ผู้ดูแลระบบ (Admin)',
-            role: 'ADMIN'
-          }
-        });
-        console.log('✅ Admin Account Ready:', admin.email);
+        const email = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+        const password = process.env.ADMIN_PASSWORD || '';
+        if (email && password) {
+          const hash = bcrypt.hashSync(password, 10);
+          const admin = await prisma.adminUser.upsert({
+            where: { email },
+            update: { password: hash, role: 'ADMIN' },
+            create: {
+              email,
+              password: hash,
+              name: 'ผู้ดูแลระบบ (Admin)',
+              role: 'ADMIN'
+            }
+          });
+          console.log('✅ Admin Account Ready:', admin.email);
+        }
 
-        const reportEmail = (process.env.REPORT_EMAIL || 'report@gmail.com').trim().toLowerCase();
-        const reportPassword = process.env.REPORT_PASSWORD || 'reportcmtcvcop123';
-        const reportHash = bcrypt.hashSync(reportPassword, 10);
-        const reportUser = await prisma.adminUser.upsert({
-          where: { email: reportEmail },
-          update: { password: reportHash, role: 'REPORT' },
-          create: {
-            email: reportEmail,
-            password: reportHash,
-            name: 'ผู้ดูและพิมพ์รายงาน (Report)',
-            role: 'REPORT'
-          }
-        });
-        console.log('✅ Report Account Ready:', reportUser.email);
+        const reportEmail = (process.env.REPORT_EMAIL || '').trim().toLowerCase();
+        const reportPassword = process.env.REPORT_PASSWORD || '';
+        if (reportEmail && reportPassword) {
+          const reportHash = bcrypt.hashSync(reportPassword, 10);
+          const reportUser = await prisma.adminUser.upsert({
+            where: { email: reportEmail },
+            update: { password: reportHash, role: 'REPORT' },
+            create: {
+              email: reportEmail,
+              password: reportHash,
+              name: 'ผู้ดูและพิมพ์รายงาน (Report)',
+              role: 'REPORT'
+            }
+          });
+          console.log('✅ Report Account Ready:', reportUser.email);
+        }
       } catch (e) {
-        console.warn('Admin init warning:', e.message);
+        console.warn('Account sync warning:', e.message);
       } finally {
         await prisma.\$disconnect();
       }
     }
-    initAdmin();
+    initAccounts();
   " || true
 fi
 

@@ -37,12 +37,6 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
-ENV DB_USER=postgres
-ENV DB_PASSWORD=password123
-ENV DB_HOST=postgres-db
-ENV DB_PORT=5432
-ENV DB_NAME=student_dashboard
-ENV DATABASE_URL="postgresql://postgres:password123@postgres-db:5432/student_dashboard?schema=public"
 
 # Create a non-root system user for security
 RUN addgroup --system --gid 1001 nodejs && \
