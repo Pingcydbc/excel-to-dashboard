@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { flushSync } from "react-dom";
 import {
   Printer,
   FileSpreadsheet,
@@ -13,9 +14,163 @@ import {
   UploadCloud,
   CheckCircle2,
   AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
+import { normalizeShortEducationLevel } from "@/lib/utils";
+
+const PROFILE_LEVEL_OPTIONS = [
+  { value: "all", label: "ทุกระดับชั้น" },
+  { value: "ปวช", label: "ปวช. (ทุกชั้นปี)" },
+  { value: "ปวช|1", label: "ปวช. ชั้นปีที่ 1" },
+  { value: "ปวช|2", label: "ปวช. ชั้นปีที่ 2" },
+  { value: "ปวช|3", label: "ปวช. ชั้นปีที่ 3" },
+  { value: "ปวช|extended", label: "ปวช. (ตกค้าง)" },
+  { value: "ปวส", label: "ปวส. (ทุกชั้นปี)" },
+  { value: "ปวส|1", label: "ปวส. ชั้นปีที่ 1" },
+  { value: "ปวส|2", label: "ปวส. ชั้นปีที่ 2" },
+  { value: "ปวส|extended", label: "ปวส. (ตกค้าง)" },
+  { value: "ป.ตรี", label: "ป.ตรี (ทล.บ.)" },
+  { value: "ป.ตรี|1", label: "ป.ตรี ชั้นปีที่ 1" },
+  { value: "ป.ตรี|2", label: "ป.ตรี ชั้นปีที่ 2" },
+];
+
+const GRADUATE_LEVEL_OPTIONS = [
+  { value: "all", label: "ทุกระดับชั้น" },
+  { value: "ปวช", label: "ปวช." },
+  { value: "ปวส", label: "ปวส." },
+  { value: "ป.ตรี", label: "ป.ตรี (ทล.บ.)" },
+];
+
+function parseLevelSelection(val: string): { baseLevel: string; yearLevel: string } {
+  if (!val || val === "all") return { baseLevel: "all", yearLevel: "all" };
+  const [baseLevel, yearLevel] = val.split("|");
+  return { baseLevel: baseLevel || "all", yearLevel: yearLevel || "all" };
+}
+
+function formatLevelDisplay(val: string, reportType: "profile" | "graduate"): string {
+  const options = reportType === "profile" ? PROFILE_LEVEL_OPTIONS : GRADUATE_LEVEL_OPTIONS;
+  const matched = options.find((opt) => opt.value === val);
+  if (matched) return matched.label;
+  return val === "all" ? "ทุกระดับชั้น" : val;
+}
+
+function paginateRecords<T>(
+  records: T[],
+  page: number,
+  pageSize: number,
+  showAll: boolean
+): { rows: T[]; startOffset: number; totalPages: number; safePage: number } {
+  if (showAll || pageSize <= 0) {
+    return { rows: records, startOffset: 0, totalPages: 1, safePage: 1 };
+  }
+  const totalPages = Math.max(1, Math.ceil(records.length / pageSize));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const startOffset = (safePage - 1) * pageSize;
+  return {
+    rows: records.slice(startOffset, startOffset + pageSize),
+    startOffset,
+    totalPages,
+    safePage,
+  };
+}
+
+function ReportPaginationBar({
+  totalItems,
+  currentPage,
+  totalPages,
+  pageSize,
+  startOffset,
+  visibleCount,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  totalItems: number;
+  currentPage: number;
+  totalPages: number;
+  pageSize: number;
+  startOffset: number;
+  visibleCount: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
+}) {
+  if (totalItems === 0) return null;
+
+  const from = startOffset + 1;
+  const to = startOffset + visibleCount;
+
+  return (
+    <div className="no-print mt-3 pt-3 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-600">
+      <div className="flex flex-wrap items-center gap-3">
+        <span>
+          แสดง <strong>{from.toLocaleString()}</strong> -{" "}
+          <strong>{to.toLocaleString()}</strong> จากทั้งหมด{" "}
+          <strong className="text-slate-900">{totalItems.toLocaleString()}</strong> คน
+        </span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-slate-500">แสดงต่อหน้า:</span>
+          <select
+            value={pageSize}
+            onChange={(e) => onPageSizeChange(Number(e.target.value))}
+            className="px-2 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 text-slate-700 font-semibold cursor-pointer"
+          >
+            <option value={50}>50 คน</option>
+            <option value={100}>100 คน</option>
+            <option value={0}>ทั้งหมด ({totalItems.toLocaleString()} คน)</option>
+          </select>
+        </div>
+      </div>
+
+      {pageSize > 0 && totalPages > 1 && (
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => onPageChange(1)}
+            disabled={currentPage <= 1}
+            title="หน้าแรก"
+            className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+          >
+            <ChevronsLeft className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onPageChange(currentPage - 1)}
+            disabled={currentPage <= 1}
+            title="ก่อนหน้า"
+            className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+          </button>
+          <span className="px-2.5 py-1 font-semibold text-slate-700">
+            หน้า {currentPage.toLocaleString()} / {totalPages.toLocaleString()}
+          </span>
+          <button
+            type="button"
+            onClick={() => onPageChange(currentPage + 1)}
+            disabled={currentPage >= totalPages}
+            title="ถัดไป"
+            className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+          >
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onPageChange(totalPages)}
+            disabled={currentPage >= totalPages}
+            title="หน้าสุดท้าย"
+            className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+          >
+            <ChevronsRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function AdminReportsPage() {
   const [authUser, setAuthUser] = useState<{
@@ -41,6 +196,10 @@ export default function AdminReportsPage() {
   const [profileRecords, setProfileRecords] = useState<any[]>([]);
   const [gradRecords, setGradRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   // Verify authentication
   useEffect(() => {
@@ -87,16 +246,18 @@ export default function AdminReportsPage() {
     if (authChecking) return;
     try {
       setLoading(true);
+      const { baseLevel, yearLevel } = parseLevelSelection(level);
       const profileParams = new URLSearchParams({
         export: "true",
-        level,
+        level: baseLevel,
+        yearLevel,
         major,
         tier: tier === "all" ? "" : tier,
         search,
       });
       const gradParams = new URLSearchParams({
         export: "true",
-        level,
+        level: baseLevel,
         major,
         status: gradStatus,
         search,
@@ -147,6 +308,29 @@ export default function AdminReportsPage() {
     fetchReportData();
   }, [fetchReportData]);
 
+  // Reset pagination to page 1 when filters or report tab change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeReport, level, major, tier, gradStatus, search, pageSize]);
+
+  // Render all filtered records when printing (including Ctrl+P) and restore pagination afterward
+  useEffect(() => {
+    const handleBeforePrint = () => {
+      flushSync(() => {
+        setIsPrinting(true);
+      });
+    };
+    const handleAfterPrint = () => {
+      setIsPrinting(false);
+    };
+    window.addEventListener("beforeprint", handleBeforePrint);
+    window.addEventListener("afterprint", handleAfterPrint);
+    return () => {
+      window.removeEventListener("beforeprint", handleBeforePrint);
+      window.removeEventListener("afterprint", handleAfterPrint);
+    };
+  }, []);
+
   // Combine majors from stats API and fetched records so the dropdown is always populated
   const availableMajors = useMemo(() => {
     return Array.from(new Set([...statsMajors, ...allUnfilteredMajors]))
@@ -192,10 +376,55 @@ export default function AdminReportsPage() {
   const unemployedPercent =
     totalGraduates > 0 ? ((unemployedCount / totalGraduates) * 100).toFixed(1) : "0.0";
 
+  const profileLevelBreakdown = useMemo(() => {
+    const groups = new Map<
+      string,
+      { label: string; total: number; full100: number; sortOrder: number }
+    >();
+    const levelOrder: Record<string, number> = { "ปวช.": 100, "ปวส.": 200, "ป.ตรี": 300 };
+
+    for (const s of profileRecords) {
+      const shortLevel = normalizeShortEducationLevel(s.educationLevel);
+      const label = s.isExtended
+        ? `${shortLevel} (ตกค้าง)`
+        : s.educationLevelWithYear || shortLevel;
+      const baseOrder = levelOrder[shortLevel] ?? 900;
+      const yearOrder = s.isExtended ? 90 : s.yearNumber ?? 99;
+      const existing = groups.get(label) || {
+        label,
+        total: 0,
+        full100: 0,
+        sortOrder: baseOrder + yearOrder,
+      };
+      existing.total += 1;
+      if ((s.completeness || 0) >= 100) {
+        existing.full100 += 1;
+      }
+      groups.set(label, existing);
+    }
+
+    return Array.from(groups.values()).sort((a, b) => a.sortOrder - b.sortOrder);
+  }, [profileRecords]);
+
   const hasActiveData =
     activeReport === "profile" ? profileRecords.length > 0 : gradRecords.length > 0;
 
+  const selectedLevelLabel = formatLevelDisplay(level, activeReport);
+
+  const profilePagination = useMemo(
+    () => paginateRecords(profileRecords, currentPage, pageSize, isPrinting),
+    [profileRecords, currentPage, pageSize, isPrinting]
+  );
+
+  const gradPagination = useMemo(
+    () => paginateRecords(gradRecords, currentPage, pageSize, isPrinting),
+    [gradRecords, currentPage, pageSize, isPrinting]
+  );
+
   const handlePrintPDF = () => {
+    flushSync(() => {
+      setIsPrinting(true);
+    });
     window.print();
   };
 
@@ -207,7 +436,7 @@ export default function AdminReportsPage() {
 
     if (activeReport === "profile") {
       const summaryRows = [
-        { หมวดหมู่: "เงื่อนไขที่กรอง - ระดับชั้น", รายการ: level === "all" ? "ทุกระดับชั้น" : level, จำนวน: "", ร้อยละ: "" },
+        { หมวดหมู่: "เงื่อนไขที่กรอง - ระดับชั้น", รายการ: selectedLevelLabel, จำนวน: "", ร้อยละ: "" },
         { หมวดหมู่: "เงื่อนไขที่กรอง - สาขาวิชา", รายการ: major === "all" ? "ทุกสาขาวิชา" : major, จำนวน: "", ร้อยละ: "" },
         { หมวดหมู่: "1. สถานะการปรับปรุงข้อมูลนักเรียน นักศึกษา", รายการ: "นักเรียนทั้งหมด", จำนวน: totalStudents, ร้อยละ: "100%" },
         { หมวดหมู่: "1. สถานะการปรับปรุงข้อมูลนักเรียน นักศึกษา", รายการ: "ความสมบูรณ์ 100%", จำนวน: full100Count, ร้อยละ: `${full100Percent}%` },
@@ -221,7 +450,7 @@ export default function AdminReportsPage() {
         คำนำหน้า: s.prefix || "",
         ชื่อ: s.firstName,
         นามสกุล: s.lastName,
-        ระดับชั้น: s.educationLevel,
+        ระดับชั้น: s.educationLevelWithYear || s.educationLevel,
         สาขาวิชา: s.major || "-",
         "ความสมบูรณ์ (%)": `${s.completeness}%`,
         สถานะ: s.completeness >= 100 ? "ครบ 100%" : "ต่ำกว่า 100%",
@@ -235,7 +464,7 @@ export default function AdminReportsPage() {
       XLSX.writeFile(wb, `รายงานสถานะการปรับปรุงข้อมูล_${dateStr}.xlsx`);
     } else {
       const summaryRows = [
-        { หมวดหมู่: "เงื่อนไขที่กรอง - ระดับชั้น", รายการ: level === "all" ? "ทุกระดับชั้น" : level, จำนวน: "", ร้อยละ: "" },
+        { หมวดหมู่: "เงื่อนไขที่กรอง - ระดับชั้น", รายการ: selectedLevelLabel, จำนวน: "", ร้อยละ: "" },
         { หมวดหมู่: "เงื่อนไขที่กรอง - สาขาวิชา", รายการ: major === "all" ? "ทุกสาขาวิชา" : major, จำนวน: "", ร้อยละ: "" },
         { หมวดหมู่: "2. ผลการติดตามผู้สำเร็จการศึกษา", รายการ: "ผู้สำเร็จการศึกษาทั้งหมด", จำนวน: totalGraduates, ร้อยละ: "100%" },
         { หมวดหมู่: "2. ผลการติดตามผู้สำเร็จการศึกษา", รายการ: "มีงานทำแล้ว", จำนวน: employedCount, ร้อยละ: `${employedPercent}%` },
@@ -357,7 +586,12 @@ export default function AdminReportsPage() {
 
           <button
             type="button"
-            onClick={() => setActiveReport("graduate")}
+            onClick={() => {
+              setActiveReport("graduate");
+              if (level.includes("|")) {
+                setLevel(parseLevelSelection(level).baseLevel);
+              }
+            }}
             className={`flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition border ${
               activeReport === "graduate"
                 ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
@@ -408,10 +642,13 @@ export default function AdminReportsPage() {
               onChange={(e) => setLevel(e.target.value)}
               className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-slate-700 font-medium"
             >
-              <option value="all">ทุกระดับชั้น</option>
-              <option value="ปวช">ปวช.</option>
-              <option value="ปวส">ปวส.</option>
-              <option value="ป.ตรี">ป.ตรี (ทล.บ.)</option>
+              {(activeReport === "profile" ? PROFILE_LEVEL_OPTIONS : GRADUATE_LEVEL_OPTIONS).map(
+                (opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                )
+              )}
             </select>
           </div>
 
@@ -512,7 +749,7 @@ export default function AdminReportsPage() {
               </p>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500 mt-1">
                 <span>
-                  <strong>ระดับชั้น:</strong> {level === "all" ? "ทุกระดับชั้น" : level}
+                  <strong>ระดับชั้น:</strong> {selectedLevelLabel}
                 </span>
                 <span>
                   <strong>สาขาวิชา:</strong> {major === "all" ? "ทุกสาขาวิชา" : major}
@@ -594,6 +831,36 @@ export default function AdminReportsPage() {
                 <div className="text-[10px] text-amber-600 font-medium">{below100Percent}%</div>
               </div>
             </div>
+            {profileLevelBreakdown.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-emerald-200/70">
+                <div className="text-[11px] font-bold text-slate-700 mb-2">
+                  สรุปแยกตามระดับชั้น / ชั้นปี
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {profileLevelBreakdown.map((item) => {
+                    const pct =
+                      item.total > 0 ? ((item.full100 / item.total) * 100).toFixed(1) : "0.0";
+                    return (
+                      <div
+                        key={item.label}
+                        className="bg-white rounded-lg px-2.5 py-2 border border-emerald-100 flex items-center justify-between gap-2 text-[11px]"
+                      >
+                        <div>
+                          <div className="font-bold text-slate-800">{item.label}</div>
+                          <div className="text-[10px] text-emerald-700">
+                            ครบ 100%: {item.full100.toLocaleString()} ({pct}%)
+                          </div>
+                        </div>
+                        <div className="text-right font-extrabold text-slate-900">
+                          {item.total.toLocaleString()}
+                          <span className="text-[10px] font-normal text-slate-400 ml-0.5">คน</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-4">
@@ -680,9 +947,11 @@ export default function AdminReportsPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200">
-                      {profileRecords.map((s, index) => (
+                      {profilePagination.rows.map((s, index) => (
                         <tr key={s.id} className="hover:bg-slate-50/70">
-                          <td className="py-1.5 px-3 text-center text-slate-500">{index + 1}</td>
+                          <td className="py-1.5 px-3 text-center text-slate-500">
+                            {profilePagination.startOffset + index + 1}
+                          </td>
                           <td className="py-1.5 px-3 font-mono font-medium text-slate-900">
                             {s.studentId}
                           </td>
@@ -690,7 +959,9 @@ export default function AdminReportsPage() {
                             {s.prefix}
                             {s.firstName} {s.lastName}
                           </td>
-                          <td className="py-1.5 px-3">{s.educationLevel}</td>
+                          <td className="py-1.5 px-3 whitespace-nowrap">
+                            {s.educationLevelWithYear || s.educationLevel}
+                          </td>
                           <td className="py-1.5 px-3">{s.major || "-"}</td>
                           <td className="py-1.5 px-3 text-center font-bold">{s.completeness}%</td>
                           <td className="py-1.5 px-3 text-center">
@@ -710,6 +981,16 @@ export default function AdminReportsPage() {
                       ))}
                     </tbody>
                   </table>
+                  <ReportPaginationBar
+                    totalItems={profileRecords.length}
+                    currentPage={profilePagination.safePage}
+                    totalPages={profilePagination.totalPages}
+                    pageSize={pageSize}
+                    startOffset={profilePagination.startOffset}
+                    visibleCount={profilePagination.rows.length}
+                    onPageChange={setCurrentPage}
+                    onPageSizeChange={setPageSize}
+                  />
                 </div>
               )}
             </div>
@@ -742,9 +1023,11 @@ export default function AdminReportsPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200">
-                      {gradRecords.map((g, index) => (
+                      {gradPagination.rows.map((g, index) => (
                         <tr key={g.id} className="hover:bg-slate-50/70">
-                          <td className="py-1.5 px-3 text-center text-slate-500">{index + 1}</td>
+                          <td className="py-1.5 px-3 text-center text-slate-500">
+                            {gradPagination.startOffset + index + 1}
+                          </td>
                           <td className="py-1.5 px-3 font-mono font-medium text-slate-900">
                             {g.studentId}
                           </td>
@@ -762,6 +1045,16 @@ export default function AdminReportsPage() {
                       ))}
                     </tbody>
                   </table>
+                  <ReportPaginationBar
+                    totalItems={gradRecords.length}
+                    currentPage={gradPagination.safePage}
+                    totalPages={gradPagination.totalPages}
+                    pageSize={pageSize}
+                    startOffset={gradPagination.startOffset}
+                    visibleCount={gradPagination.rows.length}
+                    onPageChange={setCurrentPage}
+                    onPageSizeChange={setPageSize}
+                  />
                 </div>
               )}
             </div>

@@ -1,4 +1,4 @@
-import { filterByDefaultCohort } from "./utils";
+import { filterByDefaultCohort, getReliableMaxPrefixForRecords } from "./utils";
 
 export interface RmsStudent {
   id: string;
@@ -239,10 +239,11 @@ export async function filterProfilesWithRms<
     });
 
     const matchedTotal = matchedByIdCount + matchedByNameCount;
+    const baseYearPrefix = getReliableMaxPrefixForRecords(combined) || null;
 
     return {
       filtered: combined,
-      baseYearPrefix: null,
+      baseYearPrefix,
       rmsComparison: {
         enabled: true,
         totalRms: rmsStudents.length,

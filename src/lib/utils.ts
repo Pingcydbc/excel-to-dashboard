@@ -115,7 +115,7 @@ function getLevelBucket(educationLevel: string | null | undefined): "ปวช."
   return "ปวช.";
 }
 
-function getReliableMaxPrefixForRecords(
+export function getReliableMaxPrefixForRecords(
   records: { studentId: string }[]
 ): number {
   const prefixCounts = new Map<number, number>();
@@ -203,4 +203,64 @@ export function filterByDefaultCohort<
   }
 
   return { filtered, baseYearPrefix: basePrefix };
+}
+
+export interface StudentYearLevelInfo {
+  shortLevel: string;
+  yearNumber: number | null;
+  isExtended: boolean;
+  yearLabel: string | null;
+  fullLabel: string;
+}
+
+/**
+ * Normalize education level to short display name ("ปวช.", "ปวส.", "ป.ตรี").
+ */
+export function normalizeShortEducationLevel(
+  educationLevel: string | null | undefined
+): string {
+  const lv = String(educationLevel || "").trim();
+  if (!lv) return "-";
+  if (lv.includes("ปวส")) return "ปวส.";
+  if (lv.includes("ตรี") || lv.includes("ปริญญา") || lv.includes("ทล.บ.")) return "ป.ตรี";
+  if (lv.includes("ปวช")) return "ปวช.";
+  return lv;
+}
+
+/**
+ * Compute student year level (e.g. "ปวช. ชั้นปีที่ 1") from studentId prefix and baseYearPrefix.
+ */
+export function getStudentYearLevelInfo(
+  studentId: string | null | undefined,
+  educationLevel: string | null | undefined,
+  baseYearPrefix: number | null | undefined
+): StudentYearLevelInfo {
+  const shortLevel = normalizeShortEducationLevel(educationLevel);
+  const prefix = extractStudentYearPrefix(studentId);
+
+  if (prefix === null || !baseYearPrefix) {
+    return {
+      shortLevel,
+      yearNumber: null,
+      isExtended: false,
+      yearLabel: null,
+      fullLabel: shortLevel,
+    };
+  }
+
+  const yearNumber = Math.max(1, baseYearPrefix - prefix + 1);
+  const maxYears = shortLevel === "ปวช." ? 3 : 2;
+  const isExtended = yearNumber > maxYears;
+  const yearLabel = isExtended
+    ? `ชั้นปีที่ ${yearNumber} (ตกค้าง)`
+    : `ชั้นปีที่ ${yearNumber}`;
+  const fullLabel = shortLevel !== "-" ? `${shortLevel} ${yearLabel}` : yearLabel;
+
+  return {
+    shortLevel,
+    yearNumber,
+    isExtended,
+    yearLabel,
+    fullLabel,
+  };
 }
